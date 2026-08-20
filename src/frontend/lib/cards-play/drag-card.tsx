@@ -2,6 +2,7 @@
 
 
 import Image from 'next/image';
+import { publicAssetPath } from '../publicAsset';
 import { playingStatus, passingStatus,DraggableCardProps,Card,ChatBubbleProps } from '../models/card-animation.model';
 
 import { motion } from 'framer-motion'; 
@@ -60,7 +61,7 @@ export function DraggableCard({ card, index, moveCard, p2Playing, wholeCardList 
       >
         {card && card.image ? (
           <Image
-            src={card.image}
+            src={publicAssetPath(card.image)}
             alt={card.name}
             width={100}
             height={150}

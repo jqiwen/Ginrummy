@@ -61,33 +61,6 @@ export function LogInForm() {
         alert(returned_data.message)
         return // 登录失败时不做任何事情, 密码错误则直接离开登录流程
       }
-    // Qixuan noted: 注意到next-auth的signin方法错误认证了未注册用户
-    // 已注册用户的也可以用任意密码登录，我不确定next-auth是否会去验证密码
-    // 我目前先comment掉next-auth的signin方法，用fetch的方法走后端来验证登录
-    /*
-    const result = await signIn("credentials", {
-      email: data.username,
-      password: data.password,
-      redirect: false, // 使用 false 以避免自动重定向
-    });
-    
-    console.log("login result: ", result);
-    
-    // 检查登录是否成功
-    if (result?.error) {
-      console.error("Login failed: ", result.error);
-      return; // 登录失败时不做任何事情
-    }
-
-    // 登录成功时将数据存储到 Redux store
-    dispatch(setUserInfo({ username: data.username })); // 传递 username
-    console.log("User info dispatched: ", { username: data.username });
-    router.push("/home");
-*/
-    // // 如果有 callbackUrl，重定向到该 URL
-    // if (result?.url) {
-    //   window.location.href = result.url; // 或者使用 router.push() 方法
-    // }
   }
 
   const form = useForm<z.infer<typeof formSchema>>({

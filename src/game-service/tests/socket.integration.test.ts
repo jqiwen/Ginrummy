@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { get } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { io as createClient, type Socket } from "socket.io-client";
 import { createGameService, type GameService } from "../src/server.js";
@@ -49,6 +50,23 @@ describe("Socket.IO game flow", () => {
     if (service.httpServer.listening) {
       await new Promise<void>((resolve) => service.httpServer.close(() => resolve()));
     }
+  });
+
+  it("serves the Cloud Run health endpoint", async () => {
+    const port = (service.httpServer.address() as AddressInfo).port;
+    const response = await new Promise<{ statusCode?: number; body: string }>((resolve, reject) => {
+      get(`http://127.0.0.1:${port}/health`, (healthResponse) => {
+        let body = "";
+        healthResponse.setEncoding("utf8");
+        healthResponse.on("data", (chunk) => {
+          body += chunk;
+        });
+        healthResponse.on("end", () => resolve({ statusCode: healthResponse.statusCode, body }));
+      }).on("error", reject);
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ status: "ok" });
   });
 
   it("creates, joins, deals, pushes moves/passes/knock, and synchronizes rounds", async () => {

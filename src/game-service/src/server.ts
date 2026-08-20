@@ -20,24 +20,34 @@ export interface GameService {
 
 export function createGameService(store: GameStore = gameStore): GameService {
   const httpServer = createHttpServer((request, response) => {
-    response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    response.end(JSON.stringify({
-      service: "gin-rummy-game-service",
-      status: "ok",
-      transport: "websocket",
-      path: request.url,
-    }));
+    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+    if (request.method === "GET" && pathname === "/health") {
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    response.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+    response.end(JSON.stringify({ error: "not_found" }));
   });
 
-  const origins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:3000")
-    .split(",")
-    .map((origin) => origin.trim());
+  const origins = [
+    "http://localhost:3000",
+    "https://jqiwen.github.io",
+    ...(process.env.FRONTEND_ORIGIN ?? "").split(","),
+  ]
+    .map((origin) => origin.trim())
+    .filter((origin, index, allOrigins) => origin.length > 0 && allOrigins.indexOf(origin) === index);
   const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(
     httpServer,
     {
       cors: { origin: origins, methods: ["GET", "POST"] },
       transports: ["websocket"],
       allowUpgrades: false,
+      allowRequest: (request, callback) => {
+        const origin = request.headers.origin;
+        callback(null, origin === undefined || origins.includes(origin));
+      },
     },
   );
 
@@ -62,10 +72,10 @@ export function createGameService(store: GameStore = gameStore): GameService {
 }
 
 async function start(): Promise<void> {
-  const port = Number.parseInt(process.env.PORT ?? "8080", 10);
+  const port = Number(process.env.PORT) || 8080;
   const service = createGameService();
-  service.httpServer.listen(port, () => {
-    console.log(`Gin Rummy game service listening on http://localhost:${port}`);
+  service.httpServer.listen(port, "0.0.0.0", () => {
+    console.log(`Game service listening on port ${port}`);
   });
 }
 

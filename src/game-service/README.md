@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-The service listens on [http://localhost:8080](http://localhost:8080) by default. `FRONTEND_ORIGIN` accepts a comma-separated list when more than one local or deployed frontend origin is needed.
+The service listens on [http://localhost:8080](http://localhost:8080) by default. Check it with `GET /health`. `FRONTEND_ORIGIN` accepts a comma-separated list when more than one frontend origin is needed; localhost and `https://jqiwen.github.io` are always allowed.
 
 Production and verification commands:
 
@@ -34,3 +34,7 @@ npm test
 7. Pass, next-round readiness, and disconnect changes are pushed to the room instead of polled.
 
 The full Flask endpoint mapping is in [`../../docs/MIGRATION_MAPPING.md`](../../docs/MIGRATION_MAPPING.md).
+
+## Google Cloud Run Deployment
+
+The full deployment sequence is documented in the repository [README](../../README.md#google-cloud-run-deployment). Cloud Run injects `PORT`; the production server reads it, binds to `0.0.0.0`, and starts compiled JavaScript with `npm start`.

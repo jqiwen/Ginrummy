@@ -52,7 +52,6 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "shared-store/index.js",
-    ".next/types/app/(pages)/game/[roomid]/page.tsx",
     "tests"
   ],
   "exclude": [

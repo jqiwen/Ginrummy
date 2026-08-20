@@ -95,6 +95,28 @@ const gameServiceUrl = process.env.NEXT_PUBLIC_GAME_WS_URL ?? "http://localhost:
 export const gameSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(gameServiceUrl, {
   transports: ["websocket"],
   autoConnect: false,
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+});
+
+gameSocket.on("connect", () => {
+  console.info("[game-service] connected");
+});
+
+gameSocket.on("disconnect", (reason) => {
+  console.warn(`[game-service] disconnected: ${reason}`);
+});
+
+gameSocket.on("connect_error", (error) => {
+  console.error("[game-service] connection error", error);
+});
+
+gameSocket.io.on("reconnect_attempt", (attempt) => {
+  console.info(`[game-service] reconnect attempt ${attempt}`);
+});
+
+gameSocket.io.on("reconnect", (attempt) => {
+  console.info(`[game-service] reconnected after ${attempt} attempt(s)`);
 });
 
 export function connectGameSocket(): typeof gameSocket {

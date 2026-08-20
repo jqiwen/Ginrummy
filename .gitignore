@@ -65,3 +65,9 @@ build/
 **/node_modules/
 **/dist/
 **/.next/
+**/.npm-cache/
+
+# Local environment configuration
+**/.env
+**/.env.*
+!**/.env.example

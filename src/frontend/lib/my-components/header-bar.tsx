@@ -3,7 +3,6 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { AppDispatch, RootState } from '@shared-store/index'; 
 import { useEffect } from 'react';
-import { useRouter } from "next/navigation";
 import { usePathname } from 'next/navigation'; 
 import { useState } from "react";
 import { setGameStatus } from '../shared-store/slices/game';
@@ -38,8 +37,11 @@ export function HeaderBar() {
     const user = useSelector((state: RootState) => state.user);
     const game = useSelector((state: RootState) => state.game);
 
-    const router = useRouter();
-    const pathname = usePathname();
+    const rawPathname = usePathname();
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    const pathname = basePath && rawPathname.startsWith(basePath)
+      ? rawPathname.slice(basePath.length) || "/"
+      : rawPathname;
 
     const [openPauseDialog, setOpenPauseDialog] = useState(false);
 
@@ -72,7 +74,7 @@ export function HeaderBar() {
 
     return (
         <header className="sticky top-0 z-990 w-full flex items-center justify-between px-4 py-2 flex-row ">
-            {/^\/game\/[^/]+$/.test(pathname)&& (
+            {pathname === "/game" && (
                 <div className='flex flex-row gap-2'>
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
@@ -96,7 +98,6 @@ export function HeaderBar() {
                             <div className='flex flex-col w-[300px] gap-4 m-4 '>
                                     {/* {StartButton('/home', "Save and Leave")} */}
                                     {StartButton('/home', "Leave (without save)")}
-                                    {/* {StartButton('/game/tutorial', "Restart")} */}
                                     <Button variant="ghost" onClick={() => setOpenPauseDialog(false)}>Cancel</Button>
                                 </div>
                         </DialogContent>
@@ -131,7 +132,7 @@ export function HeaderBar() {
 
             ) }
 
-            {pathname == "/home" && (
+            {(pathname === "/" || pathname === "/home") && (
                 <div>HOME</div>
             )}
 

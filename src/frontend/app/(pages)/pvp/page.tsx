@@ -3,7 +3,7 @@
 import { HeaderBar } from '@/lib/my-components/header-bar';
 
 
-import { useState,useEffect, useRef } from 'react';
+import { useState,useEffect } from 'react';
 import * as React from "react"
 
 
@@ -22,8 +22,9 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import  { createRoom, joinRoom, setGameStart } from "@/lib/match_formation/match_formation";
 import { connectGameSocket } from "@/lib/socket";
+import { publicAssetPath } from "@/lib/publicAsset";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 
 export default function PVPPage() {
@@ -73,7 +74,7 @@ function JoinCard() {
         };
         const onGameStarted = (event: { matchId: string }) => {
           if (!isCreatingNewRoom && event.matchId === createdRoomID) {
-            router.push(`/game/${event.matchId}-0`);
+            router.push(`/game?roomId=${encodeURIComponent(`${event.matchId}-0`)}`);
           }
         };
         socket.on("room:player-joined", onPlayerJoined);
@@ -123,7 +124,7 @@ function JoinCard() {
             className="w-full flex items-center justify-center"
             style={{ 
                 height: "calc(100vh - 52px)",
-                backgroundImage: "url('/main-image/poster.jpg')",
+                backgroundImage: `url("${publicAssetPath("/main-image/poster.jpg")}")`,
                 backgroundSize: "cover",
                 backgroundPosition: "center"
             }}
@@ -186,7 +187,7 @@ function JoinCard() {
                             onClick={async () => {
                                 const res = await setGameStart(createdRoomID!);
                                 if (res.result === 0) {
-                                router.push(`/game/${createdRoomID}-1`);
+                                router.push(`/game?roomId=${encodeURIComponent(`${createdRoomID}-1`)}`);
                                 } else {
                                 alert("Failed to start game: " + res.message);
                                 }

@@ -29,6 +29,7 @@ import { DraggableCard} from './drag-card'
 import { decimalToDozenal } from './logics/count-dozenal';
 import { AvatarDisplay,ChatBubble  } from '@my-components/avatar'
 import GameOverOverlay from './game-end-overlay'
+import { publicAssetPath } from '../publicAsset';
 import {
   connectGameSocket,
   type DealState,
@@ -562,7 +563,7 @@ useEffect(() => {
             card && card.image ? (
               <Image
                 key={`dropzone-card-${idx}`}
-                src={card.image}
+                src={publicAssetPath(card.image)}
                 alt={card.name}
                 width={100}
                 height={150}
@@ -590,7 +591,7 @@ useEffect(() => {
       <div className="h-full w-full flex flex-col items-center justify-center select-none">
 
         {/* Player1 avatar*/}
-        <AvatarDisplay image={'/main-image/avatar-robot.jpg'} player={1} name={roomId == 'tutorial' ? 'Robot' : host == '1' ? 'Player 2' : 'Player 1'} p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
+        <AvatarDisplay image={publicAssetPath('/main-image/avatar-robot.jpg')} player={1} name={roomId == 'tutorial' ? 'Robot' : host == '1' ? 'Player 2' : 'Player 1'} p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
 
         <div className="relative flex items-center justify-center w-full h-[500px] gap-4">
             {/* Player1 */}
@@ -633,7 +634,7 @@ useEffect(() => {
                             className="object-contain cursor-not-allowed"
                         /> */}
                         <Image
-                          src={isKnocked ? card.image : "/cards-image/back.svg.png"}
+                          src={publicAssetPath(isKnocked ? card.image : "/cards-image/back.svg.png")}
                           alt={`Card ${index + 1}`}
                           width={100}
                           height={150}
@@ -647,7 +648,7 @@ useEffect(() => {
             {/* middle card stack */}
             <div className="flex relative flex-row gap-6 items-center justify-center text-center">
                 <Image
-                    src="/cards-image/back.svg.png"
+                    src={publicAssetPath("/cards-image/back.svg.png")}
                     alt="Deck"
                     width={100}
                     height={150}
@@ -672,7 +673,7 @@ useEffect(() => {
                   >
                     {p1DroppingCard && p1DroppingCard.image ? (
                       <Image
-                        src={p1DroppingCard.image}
+                        src={publicAssetPath(p1DroppingCard.image)}
                         alt={p1DroppingCard.name}
                         width={100}
                         height={150}
@@ -829,7 +830,7 @@ useEffect(() => {
           )}
 
 
-          <AvatarDisplay image={'/main-image/avatar-user.jpg'} player={2} name={roomId == 'tutorial' ? userName : host == '1' ? 'Player 1' : 'Player 2'}  p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
+          <AvatarDisplay image={publicAssetPath('/main-image/avatar-user.jpg')} player={2} name={roomId == 'tutorial' ? userName : host == '1' ? 'Player 1' : 'Player 2'}  p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
 
           {p2Playing == 'passOrPick' && (
             <div

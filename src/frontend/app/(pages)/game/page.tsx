@@ -7,25 +7,23 @@ import DealCards from "@/lib/cards-play/deal-card-animation";
 
 import { useSelector, useDispatch } from "react-redux";
 import { AppDispatch, RootState } from "@shared-store/index";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { setGameStatus } from "@/lib/shared-store/slices/game";
 
 import { Button } from "@/components/ui/button";
 import { Cross1Icon } from "@radix-ui/react-icons";
 
-import { useParams } from "next/navigation";
-import { setTimeout } from "timers/promises";
+import { useSearchParams } from "next/navigation";
+import { publicAssetPath } from "@/lib/publicAsset";
 
 import DozenalGinRummyRules from "@/lib/my-components/rule"
 
 // host -> 1
 // join -> 0
 
-export default function GamePage() {
-    const params = useParams();
-    const routRroomId = params?.roomid;
-
-    const fullRoomId = Array.isArray(routRroomId) ? routRroomId[0] : routRroomId;
+function GameContent() {
+    const searchParams = useSearchParams();
+    const fullRoomId = searchParams.get("roomId") ?? "tutorial";
     const roomId = fullRoomId.split("-")[0];
     const host = fullRoomId.split("-")[1] ?? '1';
 
@@ -134,7 +132,7 @@ export default function GamePage() {
                     <div
                         className="absolute inset-0 z-0"
                         style={{
-                            backgroundImage: `url('/main-image/background-nothing.jpg')`, // 替换成你的图片路径
+                            backgroundImage: `url("${publicAssetPath("/main-image/background-nothing.jpg")}")`, // 替换成你的图片路径
                             backgroundSize: '100% 100%', // 完全填充，可变形
                             backgroundRepeat: 'no-repeat',
                             backgroundPosition: 'center',
@@ -149,3 +147,11 @@ export default function GamePage() {
                     );
 
                 }
+
+export default function GamePage() {
+    return (
+        <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading game...</div>}>
+            <GameContent />
+        </Suspense>
+    );
+}

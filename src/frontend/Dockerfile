@@ -1,23 +1,18 @@
-# Use Node.js LTS version as the base image
-FROM node:18
+FROM node:22-alpine AS build
 
-# Set the working directory
 WORKDIR /app
 
-# Copy the package.json and package-lock.json to the container
-COPY package*.json ./
+ARG NEXT_PUBLIC_GAME_WS_URL=http://localhost:8080
+ENV NEXT_PUBLIC_GAME_WS_URL=$NEXT_PUBLIC_GAME_WS_URL
 
-# Install dependencies
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Copy the entire project to the working directory in the container
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Expose the port Next.js runs on
-EXPOSE 3000
+FROM nginx:1.27-alpine
 
-# Start Next.js in production mode
-CMD ["npm", "run", "start"]
+COPY --from=build /app/out /usr/share/nginx/html/ginrummy
+
+EXPOSE 80

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import Image from 'next/image';
+import { publicAssetPath } from '@/lib/publicAsset';
 
 import { HeaderBar } from '@/lib/my-components/header-bar';
 import {
@@ -35,7 +36,7 @@ export default function homePage() {
             <div className='flex felx-col items-center justify-center w-full flex-1 pt-[50px]'>
                 <div className="group relative flex flex-col w-[90%] h-[700px]  rounded-lg shadow-lg transition-all duration-300 ease-in-out">
                     <div className="flex h-full w-full">
-                        <Image  src="/main-image/poster.jpg"
+                        <Image  src={publicAssetPath("/main-image/poster.jpg")}
                                 alt="poster"
                                 layout="fill"
                                 objectFit="cover"
@@ -53,7 +54,7 @@ export default function homePage() {
                                 <DialogDescription>Choose your game mode and start playing!</DialogDescription>
                             </VisuallyHidden>
                             <div className='flex flex-col w-[300px] gap-4 m-4 '>
-                                {StartButton("/game/tutorial", "Start a tutorial")}
+                                {StartButton("/game?roomId=tutorial", "Start a tutorial")}
                                 {/* {StartButton("", "Continue a Game")} */}
                                 {/* {StartButton("", "Start a Tutorial")} */}
                                 {StartButton("/pvp", "Play with a Friend")}
