@@ -1,17 +1,18 @@
-## Getting Started
+## Frontend
 
-First, run the development server:
+Copy `.env.example` to `.env.local`, then install and start the existing Next.js UI:
 
 ```bash
-source .env.local
+npm install
 npm run dev
 ```
 
-Open a new terminal and start the backend server using the following command:
+Open [http://localhost:3000](http://localhost:3000). The Socket.IO game service must be running at the URL in `NEXT_PUBLIC_GAME_WS_URL` (localhost port 8080 by default).
+
+Run the frontend tests and production build with:
 
 ```bash
-docker-compose up
+npm test
+npm run build
 ```
-
-the backend server is running at port 8000
 

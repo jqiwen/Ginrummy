@@ -60,3 +60,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# JavaScript workspaces
+**/node_modules/
+**/dist/
+**/.next/

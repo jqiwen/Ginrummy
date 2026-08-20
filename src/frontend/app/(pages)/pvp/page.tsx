@@ -20,7 +20,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 // import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import  { createRoom, joinRoom, checkRoomStatus, setGameStart , isGameStarted} from "@/lib/match_formation/match_formation";
+import  { createRoom, joinRoom, setGameStart } from "@/lib/match_formation/match_formation";
+import { connectGameSocket } from "@/lib/socket";
 
 import { useParams, useRouter } from "next/navigation";
 
@@ -62,49 +63,26 @@ function JoinCard() {
         }
     }, [isCreatingNewRoom]);
 
-    // create 查询玩家是否已经加入
     useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-      
-        if (createdRoomID && isCreatingNewRoom) {
-          intervalId = setInterval(async () => {
-            const status = await checkRoomStatus(createdRoomID);
-      
-            if (status.result === 0) {
-              // Second player has joined, stop polling
-              clearInterval(intervalId);
-              setActionMessage("Second player has joined. You can now start!");
-              setAbleToStart(true)
-            }
-          }, 2000); // every 2 seconds
-        }
-      
-        return () => {
-          if (intervalId) clearInterval(intervalId); // cleanup on unmount or mode change
+        const socket = connectGameSocket();
+        const onPlayerJoined = (event: { matchId: string }) => {
+          if (isCreatingNewRoom && event.matchId === createdRoomID) {
+            setActionMessage("Second player has joined. You can now start!");
+            setAbleToStart(true);
+          }
         };
-      }, [createdRoomID, isCreatingNewRoom]);
-
-      // join 查询游戏是否开始
-      useEffect(() => {
-        let intervalId: NodeJS.Timeout;
-      
-        // 如果是 Join 模式，并且已设置 RoomID，就开始轮询是否游戏已开始
-        if (createdRoomID && !isCreatingNewRoom) {
-          intervalId = setInterval(async () => {
-            const status = await isGameStarted(createdRoomID);
-            console.log("Game start status:", status);
-      
-            if (status.result === 0) {
-              clearInterval(intervalId);
-              router.push(`/game/${createdRoomID}-0`);
-            }
-          }, 2000);
-        }
-      
-        return () => {
-          if (intervalId) clearInterval(intervalId);
+        const onGameStarted = (event: { matchId: string }) => {
+          if (!isCreatingNewRoom && event.matchId === createdRoomID) {
+            router.push(`/game/${event.matchId}-0`);
+          }
         };
-      }, [createdRoomID, !isCreatingNewRoom]);
+        socket.on("room:player-joined", onPlayerJoined);
+        socket.on("game:started", onGameStarted);
+        return () => {
+          socket.off("room:player-joined", onPlayerJoined);
+          socket.off("game:started", onGameStarted);
+        };
+      }, [createdRoomID, isCreatingNewRoom, router]);
       
 
     function handleSwitch(checked: boolean) {

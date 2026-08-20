@@ -7,7 +7,6 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 
 import { Button } from "@/components/ui/button"
 
-import { CARDS } from '../data/cards.data';
 import { Card,PlayerSummary } from '../models/card-animation.model';
 import GinRummyScore from './logics/calc-score';
 
@@ -30,16 +29,14 @@ import { DraggableCard} from './drag-card'
 import { decimalToDozenal } from './logics/count-dozenal';
 import { AvatarDisplay,ChatBubble  } from '@my-components/avatar'
 import GameOverOverlay from './game-end-overlay'
-
-// const backend_url = "http://127.0.0.1:8080"
-// const backend_url = "http://localhost:8080";
-const backend_url = process.env.BACKEND_URL || "https://backend.ginrummys.ca";
-
-
-function getRandomCards(cards: Card[]): Card[] {
-  return [...cards].sort(() => 0.5 - Math.random()); // set random rards
-  
-}
+import {
+  connectGameSocket,
+  type DealState,
+  type GameOperationEvent,
+  type PassStatusEvent,
+  type PlayerId,
+  type RoundResultEvent,
+} from '../socket';
 
 export default function DealCards({ roomId, host, userName}: { roomId: string; host: string; userName: string}) {
   const [dealing, setDealing] = useState(false);
@@ -52,7 +49,7 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
 
   const [p1DroppingCard, setP1DroppingCard] = useState<Card | null>(null); // p1 dropping card
   const [sendingNewCard, setSendingNewCard] = useState<sendingNewCardPlace>(null); // sending card from stack or dropzone
-  const [remainingCards, setRemainingCards] = useState<Card[]>([]); // remaining cards in main stack, 
+  const [remainingCards, setRemainingCards] = useState(0);
   const [dropZoneCards, setDropZoneCards] = useState<Card[]>([]); // drop zone cards
 
   const [scoreSummary, setScoreSummary] = useState<ScoreSummary>()
@@ -65,11 +62,9 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
   const [currentRound, setCurrentRound] = useState<number>(1)
 
   
-  const [passResult, setPassResult] = useState(null)
+  const [passResult, setPassResult] = useState<number | null>(null)
    
   const dropZoneRef = useRef<Card[]>([]);
-  const hasHandlePass = useRef(false)
-
   const [open, setOpen] = useState(false); 
 
   const [waitingNextRound, setWaitingNextRound] = useState<boolean>(false)
@@ -77,17 +72,7 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
   const [isKnocked, setIsKnocked] = useState<boolean>(false)
   const [showDeadwoods, setShowDeadwoods] = useState<boolean>(false)
 
-  const [restart, setRestart] = useState<boolean>(false)
-
-  const shuffledCards = getRandomCards(CARDS); 
-  const initialCardsNumber = 24
-
-
   const hasHandledP1Play = useRef(false);
-
-  const hasHandledPass = useRef(false);
-  const pollingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const currentPassRef = useRef(currentPass);
 
   // const [actualPlayer, setActualPlayer] = useState("")
 
@@ -107,287 +92,52 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
 
   }, [whosTurn, host]);
   
-  // click deal，host start game
-  async function startGame(){ 
-    const initialCards: Card[] = [];
-    const p1Cards: Card[] = [];
-    const p2Cards: Card[] = [];
+  async function startGame(){
+    const socket = connectGameSocket();
+    let thisGameID = matchID;
 
-    let thisGameID = ''
-    if (roomId != 'tutorial'){
-      thisGameID = roomId
+    if (roomId === 'tutorial') {
+      const created = await new Promise<{ success: boolean; data?: { matchId: string } }>((resolve) => {
+        socket.emit("room:create", { bot: true }, resolve);
+      });
+      if (!created.success || !created.data) {
+        alert("Unable to create the tutorial match.");
+        return;
+      }
+      thisGameID = created.data.matchId;
+      setMatchID(thisGameID);
     }
 
-    if (roomId == 'tutorial'){
-      await fetch(`${backend_url}/api/match_create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bot: 'True'
-        })
-      })
-      .then((response) => response.json())
-      .then((data) => {
-        thisGameID = data['match_id']
-        setMatchID(thisGameID)
-      })
-    }
-    setMatchID(thisGameID)
-
-    await fetch(`${backend_url}/api/match_start`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        host: host,
-        current_host: whosTurn,
-        matchid: thisGameID,
-        round:currentRound
-      })
-    })
-    .then((response) => response.json()).then((data) => {
-      setDropZoneCards([{ order:data["order0"], point: data["point0"], name: data["name0"], image: data["image0"], color: data["color0"], text: data["text0"] }])
-        p1Cards.push({ order:data["order1"], point: data["point1"], name: data["name1"], image: data["image1"], color: data["color1"], text: data["text1"] })
-        p2Cards.push({ order:data["order2"], point: data["point2"], name: data["name2"], image: data["image2"], color: data["color2"], text: data["text2"] })
-        p1Cards.push({ order:data["order3"], point: data["point3"], name: data["name3"], image: data["image3"], color: data["color3"], text: data["text3"] })
-        p2Cards.push({ order:data["order4"], point: data["point4"], name: data["name4"], image: data["image4"], color: data["color4"], text: data["text4"] })
-        p1Cards.push({ order:data["order5"], point: data["point5"], name: data["name5"], image: data["image5"], color: data["color5"], text: data["text5"] })
-        p2Cards.push({ order:data["order6"], point: data["point6"], name: data["name6"], image: data["image6"], color: data["color6"], text: data["text6"] })
-        p1Cards.push({ order:data["order7"], point: data["point7"], name: data["name7"], image: data["image7"], color: data["color7"], text: data["text7"] })
-        p2Cards.push({ order:data["order8"], point: data["point8"], name: data["name8"], image: data["image8"], color: data["color8"], text: data["text8"] })
-        p1Cards.push({ order:data["order9"], point: data["point9"], name: data["name9"], image: data["image9"], color: data["color9"], text: data["text9"] })
-        p2Cards.push({ order:data["order10"], point: data["point10"], name: data["name10"], image: data["image10"], color: data["color10"], text: data["text10"] })
-        p1Cards.push({ order:data["order11"], point: data["point11"], name: data["name11"], image: data["image11"], color: data["color11"], text: data["text11"] })
-        p2Cards.push({ order:data["order12"], point: data["point12"], name: data["name12"], image: data["image12"], color: data["color12"], text: data["text12"] })
-        p1Cards.push({ order:data["order13"], point: data["point13"], name: data["name13"], image: data["image13"], color: data["color13"], text: data["text13"] })
-        p2Cards.push({ order:data["order14"], point: data["point14"], name: data["name14"], image: data["image14"], color: data["color14"], text: data["text14"] })
-        p1Cards.push({ order:data["order15"], point: data["point15"], name: data["name15"], image: data["image15"], color: data["color15"], text: data["text15"] })
-        p2Cards.push({ order:data["order16"], point: data["point16"], name: data["name16"], image: data["image16"], color: data["color16"], text: data["text16"] })
-        p1Cards.push({ order:data["order17"], point: data["point17"], name: data["name17"], image: data["image17"], color: data["color17"], text: data["text17"] })
-        p2Cards.push({ order:data["order18"], point: data["point18"], name: data["name18"], image: data["image18"], color: data["color18"], text: data["text18"] })
-        p1Cards.push({ order:data["order19"], point: data["point19"], name: data["name19"], image: data["image19"], color: data["color19"], text: data["text19"] })
-        p2Cards.push({ order:data["order20"], point: data["point20"], name: data["name20"], image: data["image20"], color: data["color20"], text: data["text20"] })
-        p1Cards.push({ order:data["order21"], point: data["point21"], name: data["name21"], image: data["image21"], color: data["color21"], text: data["text21"] })
-        p2Cards.push({ order:data["order22"], point: data["point22"], name: data["name22"], image: data["image22"], color: data["color22"], text: data["text22"] })
-        p1Cards.push({ order:data["order23"], point: data["point23"], name: data["name23"], image: data["image23"], color: data["color23"], text: data["text23"] })
-        p2Cards.push({ order:data["order24"], point: data["point24"], name: data["name24"], image: data["image24"], color: data["color24"], text: data["text24"] })
-    })
-
-    await fetch(`${backend_url}/api/set_game_dealing_started`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchid: matchID })
+    socket.emit("round:start", {
+      matchId: thisGameID,
+      playerId: host as PlayerId,
+      round: currentRound,
+      startWith: whosTurn as PlayerId,
+    }, (response) => {
+      if (!response.success) alert(response.message);
     });
+  }
 
-    setPlayer1Cards(GinRummyScore(p1Cards));
-    setPlayer2Cards(GinRummyScore(p2Cards));
+  function applyDeal(state: DealState) {
+    setMatchID(state.matchId);
+    setDropZoneCards([state.dropCard]);
+    setPlayer1Cards(GinRummyScore(state.opponentCards));
+    setPlayer2Cards(GinRummyScore(state.ownCards));
+    setRemainingCards(state.remainingCards);
     setDealing(true);
     setTimeout(() => {
-      setCurrentPass(2);
       setShowDeadwoods(true);
-
-    }, 7400);
-    
-
-    // 自己点击了deal，对方pick or pass
-    if (roomId == 'tutorial') {
-      // setP2Playing("passOrPick");
-      // setP1Playing(null)
-      setTimeout(() => {
-        setCurrentPass(2); 
+      if (state.firstPlayer === host) {
+        setCurrentPass(2);
         setP2Playing("passOrPick");
-        setP1Playing(null)
-      }, 7400);
-    } else {
-      // setP1Playing("passOrPick");
-      // setP2Playing(null)
-      setTimeout(() => {
-        setCurrentPass(1); 
+        setP1Playing(null);
+      } else {
+        setCurrentPass(1);
         setP1Playing("passOrPick");
-        setP2Playing(null)
-      }, 7400);
-  
-    }
-
-    setRemainingCards(shuffledCards.slice(initialCardsNumber));
-  }
-
-  // non-host check if host click deal
-  useEffect(() => {
-    if (host !== whosTurn && !dealing) {
-      
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch(`${backend_url}/api/is_game_dealing_started`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ matchid: matchID }),
-          });
-          const data = await res.json();
-          if (data.result === 0) {
-            clearInterval(interval);
-            fetchInitialCardsForGuest();
-            await fetch(`${backend_url}/api/reset_game_dealing_started`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ matchid: matchID }),
-            });
-
-          }
-        } catch (err) {
-          // console.error("Polling failed:", err);
-        }
-      }, 2000);
-
-      return () => clearInterval(interval); 
-    }
-  }, [host, dealing, whosTurn]);
-
-  // non-host player get cards from dealing
-  async function fetchInitialCardsForGuest() {
-    try {
-      const response = await fetch(`${backend_url}/api/match_start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          host: host,
-          matchid: matchID,
-          round: currentRound
-        })
-      });
-  
-      const data = await response.json();
-  
-      const p1Cards: Card[] = [];
-      const p2Cards: Card[] = [];
-  
-      const dropCard = {
-        order: data["order0"],
-        point: data["point0"],
-        name: data["name0"],
-        image: data["image0"],
-        color: data["color0"],
-        text: data["text0"]
-      };
-      
-      setDropZoneCards([dropCard]);
-      for (let i = 1; i <= 23; i += 2) {
-        p2Cards.push({
-          order: data[`order${i}`],
-          point: data[`point${i}`],
-          name: data[`name${i}`],
-          image: data[`image${i}`],
-          color: data[`color${i}`],
-          text: data[`text${i}`]
-        });
+        setP2Playing(null);
       }
-  
-      for (let i = 2; i <= 24; i += 2) {
-        p1Cards.push({
-          order: data[`order${i}`],
-          point: data[`point${i}`],
-          name: data[`name${i}`],
-          image: data[`image${i}`],
-          color: data[`color${i}`],
-          text: data[`text${i}`]
-        });
-      }
-
-      setPlayer1Cards(GinRummyScore(p1Cards));
-      setPlayer2Cards(GinRummyScore(p2Cards));
-      setDealing(true);
-      setTimeout(() => {
-        setShowDeadwoods(true)
-        setP2Playing("passOrPick");
-        setP1Playing(null)
-      }, 7400);
-      // setP2Playing("passOrPick");
-      // setP1Playing(null)
-  
-    } catch (err) {
-      // console.error("fetchInitialCardsForGuest failed:", err);
-    }
+    }, 7400);
   }
-
-  useEffect(() => {
-    currentPassRef.current = currentPass;
-  }, [currentPass]);
-
-
-  // host check if non-host clicked pass (except tutorial)
-  useEffect(() => {
-  
-    console.log('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz:',dealing);
-    console.log('yyyyyyyyyyyyyyyyyyyyyyyyyyy: ', host == whosTurn && dealing && currentPassRef.current === null && !hasHandledPass.current && roomId !== 'tutorial');
-    
-    
-    if (host == whosTurn && dealing && currentPassRef.current === null && !hasHandledPass.current && roomId !== 'tutorial') {
-
-      let count = 0;
-      const MAX_ATTEMPTS = 2000;
-
-      const interval = setInterval(async () => {
-        if (hasHandledPass.current) {
-          clearInterval(interval);
-          return;
-        }
-
-        if (count++ >= MAX_ATTEMPTS) {
-          // console.warn("⚠️ Polling timeout: No pass detected after max attempts.");
-          clearInterval(interval);
-          return;
-        }
-
-        try {
-          console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@:', matchID,currentRound,  host );
-          
-          const res = await fetch(`${backend_url}/api/is_passed`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ matchid: matchID,round: currentRound, player: host })
-          });
-
-          const data = await res.json();
-
-          if (data.result === 0) {
-            hasHandledPass.current = true;
-            setP1Playing(null);
-            setP2Playing("pickTop");
-            setCurrentPass(2)
-            clearInterval(interval);
-          } else if (data.result === 2) {
-            hasHandledPass.current = true;
-            console.log('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
-            
-            handleP1Play(); 
-            setP2Playing(null);
-            setCurrentPass(null)
-            clearInterval(interval);
-          } else if (data.result === 3) {
-            hasHandledPass.current = true;
-            setP2Playing("passOrPick");
-            setP1Playing(null);
-            clearInterval(interval);
-            setCurrentPass(2)
-            // hasHandledPass.current = true;
-            // handleP1Play(); 
-            // clearInterval(interval);
-          } 
-        } catch (err) {
-          // console.error("❌ Polling is_passed failed:", err);
-        }
-      }, 2000);
-
-      return () => {
-        clearInterval(interval);
-      };
-    }
-  }, [dealing]);
-
-  // }, [dealing, host, matchID,whosTurn,restart]);
 
 useEffect(() => {
   dropZoneRef.current = dropZoneCards;
@@ -401,19 +151,11 @@ useEffect(() => {
     setOpen(false)
     setWaitingNextRound(false); 
     hasHandledP1Play.current = false
-    currentPassRef.current = null
-    hasHandledPass.current = false
     setCurrentPass(null)
     setIsKnocked(false)
     setShowDeadwoods(false);
     setPassResult(null)
 
-    const newRestart = !restart
-    setRestart(newRestart)
-
-    const thisActualPlayer = host === whosTurn ? "1" : "0"
-    console.log("77777777777777777777777777777777777777777777: ", thisActualPlayer);
-    
     const nextRound = currentRound + 1
     setCurrentRound(nextRound)
     
@@ -429,131 +171,45 @@ useEffect(() => {
 
 
   async function get_card_from_stack(is_P2: boolean){
-
-    console.log('11111111111111111111111111111111111111111111111111');
-    
-    await fetch(`${backend_url}/api/match_move`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        host: host,
-        matchid: matchID,
-        current_host: whosTurn,
-        round: currentRound,
-        move: 'stack'})
-    })
-    .then((response) => response.json())
-    .then((data) => {
-      const newCard = { order:data["order"], point: data["point"], name: data["name"], image: data["image"], color: data["color"], text: data["text"] };
-      setSendingNewCard('stack'); 
-      if (is_P2){
-        setP2Playing('toDrop');
-        const updatedCards = [...player2Cards.cards, newCard]
-        setPlayer2Cards(GinRummyScore(updatedCards));
+    const socket = connectGameSocket();
+    socket.emit("game:draw-stack", {
+      matchId: matchID,
+      playerId: host as PlayerId,
+      round: currentRound,
+    }, (response) => {
+      if (!response.success || !response.data) {
+        alert(response.message);
+        return;
       }
-    }
-  )
+      setRemainingCards(response.data.remainingCards);
+      setSendingNewCard('stack');
+      if (is_P2) {
+        setP2Playing('toDrop');
+        setPlayer2Cards(GinRummyScore([...player2Cards.cards, response.data.card]));
+      }
+    });
   }
 
   useEffect(() => {
-    if (dealing) {
-      setTimeout(() => {
-        if (host === whosTurn) {
-          setCurrentPass(1);
-        } else {
-          setCurrentPass(2); 
-        }
-      }, 7400);    
-     
-      // update the remaining card
-      setRemainingCards(shuffledCards.slice(initialCardsNumber));
-     } else {
+    if (!dealing) {
       setPlayer1Cards({cards:[]})
       setPlayer2Cards({cards:[]})
-      setRemainingCards([])
-      // setDropZoneCards([])
+      setRemainingCards(0)
       setSendingNewCard(null)
-     }
+    }
 }, [dealing]);
 
-    // 点击Pass按钮，P1拿最开始的牌 只有点击的时候会触发，两边都会点击
-    function handlePass(){
+    function handlePass() {
       setP2Playing(null);
       setP1Playing('toTake')
-      
-      if (roomId == 'tutorial'){
-        //bug：hanldePass， robot从stack拿牌
-        console.log('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
-        
-        handleP1Play()
-      } else {
-        fetch(`${backend_url}/api/set_passed`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ matchid: matchID,round: currentRound, player: host  })
-        });
-
-       
-          let count = 0;
-          const MAX_ATTEMPTS = 2000;
-      
-          const interval = setInterval(async () => {
-            if (count++ >= MAX_ATTEMPTS) {
-              clearInterval(interval);
-              return;
-            }
-      
-            try {
-              const res = await fetch(`${backend_url}/api/is_passed`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ matchid: matchID, round: currentRound, player: host })
-              });
-      
-              const data = await res.json();
-
-              setPassResult(data.result)
-      
-              if (data.result === 0) {
-                // 双方都 pass，自己出牌
-                setP1Playing(null);
-                setP2Playing("toTake");
-                setCurrentPass(null);
-                clearInterval(interval);
-              } else if (data.result === 2) {
-                // 对方已经出牌，触发 handleP1Play
-                setP2Playing(null);
-                setP1Playing("toTake");
-                setCurrentPass(1);
-                console.log('cccccccccccccccccccccccccccccc');
-                
-                handleP1Play();
-                clearInterval(interval);
-              } else if (data.result === 3) {
-                // 对方只点了 pass，不处理，继续轮询
-                // handleP1Play()
-              }
-              // else if (data.result === 4) {
-              //   // 对方已经出牌（没有pass），立即触发 handleP1Play
-              //   setP2Playing(null);
-              //   setP1Playing("toTake");
-              //   setCurrentPass(1);
-              //   handleP1Play();
-              //   clearInterval(interval);
-              // }
-            } catch (err) {
-              console.error("Polling is_passed failed:", err);
-            }
-          }, 2000);
-        //   if (host !== whosTurn) {
-        //     handleP1Play()
-        // }
-      
-
-    }
-      
+      const socket = connectGameSocket();
+      socket.emit("game:pass", {
+        matchId: matchID,
+        playerId: host as PlayerId,
+        round: currentRound,
+      }, (response) => {
+        if (!response.success) alert(response.message);
+      });
       setCurrentPass(null)
     }
 
@@ -575,9 +231,7 @@ useEffect(() => {
           alert('You need to discard.');
           break;
         case 'toTake':
-          if (remainingCards.length > 0) {
-            //const [newCard, ...rest] = remainingCards;
-            //setRemainingCards(rest);
+          if (remainingCards > 0) {
             await get_card_from_stack(true)
             
           } else {
@@ -599,37 +253,28 @@ useEffect(() => {
           setCurrentPass(null)
         }
         if (dropZoneCards && dropZoneCards.length > 0) {
-          console.log('2222222222222222222222222222222222222222');
-          
-          await fetch(`${backend_url}/api/match_move`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              host: host,
-              matchid: matchID,
-              current_host: whosTurn,
-              round: currentRound,
-              move: 'dropzone'})
-          })
-          const newDropZoneCards = [...dropZoneCards];
-          const lastCard = newDropZoneCards.pop();
-          // setDropZoneCards(newDropZoneCards);
-
-          
-          if (lastCard) {
-            setLastPickedCard(lastCard)
+          const socket = connectGameSocket();
+          socket.emit("game:draw-discard", {
+            matchId: matchID,
+            playerId: host as PlayerId,
+            round: currentRound,
+          }, (response) => {
+            if (!response.success || !response.data) {
+              alert(response.message);
+              return;
+            }
+            const newDropZoneCards = [...dropZoneCards];
+            newDropZoneCards.pop();
+            const pickedCard = response.data.card;
+            setLastPickedCard(pickedCard)
             setSendingNewCard('dropzone');
             setP2Playing('toDrop');
             setTimeout(() => {
-              const updatedCards = [...player2Cards.cards, lastCard]
+              const updatedCards = [...player2Cards.cards, pickedCard]
               setPlayer2Cards(GinRummyScore(updatedCards));
-              // setDropZoneCards(dropZoneCards);
               setDropZoneCards(newDropZoneCards);
-
             }, 100);
-          } 
+          });
         } else {
           alert('No card in Drop Zone!');
         }
@@ -648,139 +293,27 @@ useEffect(() => {
             alert("⚠️ This card was just picked! Please choose a different card.");
             return;
           }
-          setDropZoneCards([...dropZoneCards, item.card]);
-          setLastPickedCard(null)
-
-          const updatedCards = [...player2Cards.cards];
-          updatedCards.splice(item.index, 1);
-          setPlayer2Cards(GinRummyScore(updatedCards));
-          console.log('333333333333333333333333333333333333333333333333');
-          
-          await fetch(`${backend_url}/api/match_move`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              host: host,
-              current_host: whosTurn,
-              matchid: matchID,
-              move: 'drop',
-              player: host,
-              round: currentRound,
-              dropped_card_name: item.card.name})
-          })
-          setP1Playing("toTake")
-          setP2Playing(null)
-
-          console.log('dddddddddddddddddddddddddddddddddddddddddddddddd');
-          
-          handleP1Play()
+          const socket = connectGameSocket();
+          socket.emit("game:discard", {
+            matchId: matchID,
+            playerId: host as PlayerId,
+            round: currentRound,
+            cardName: item.card.name,
+          }, (response) => {
+            if (!response.success) {
+              alert(response.message);
+              return;
+            }
+            setDropZoneCards([...dropZoneCards, item.card]);
+            setLastPickedCard(null)
+            const updatedCards = [...player2Cards.cards];
+            updatedCards.splice(item.index, 1);
+            setPlayer2Cards(GinRummyScore(updatedCards));
+            setP1Playing("toTake")
+            setP2Playing(null)
+          });
       }
     };
-  
-    // P1自动出牌
-    async function handleP1Play() {
-      let ready = false;
-      while (ready == false){
-        console.log('4444444444444444444444444444444444444444444444444');
-        
-        await fetch(`${backend_url}/api/match_move`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            host: host,
-            matchid: matchID,
-            current_host: whosTurn,
-            round: currentRound,
-            move: 'opponent_status'})
-        }).then((response) => response.json())
-        .then((data) => {
-          ready = data["result"] == 0
-        })
-      }
-      setP2Playing(null)
-
-      let alreadyHandled = false;
-      const interval = setInterval(async () => {
-        if (alreadyHandled){
-          clearInterval(interval);
-        }
-        
-        try {
-          console.log('55555555555555555555555555555555555555555555555555');
-          
-          const res = await fetch(`${backend_url}/api/match_move`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              host: host,
-              matchid: matchID,
-              current_host: whosTurn,
-              round: currentRound,
-              move: 'wait_opponent'})
-          })
-          const data = await res.json();
-
-          if (data['remaining_cards'] <2){
-            alert('no cards in stack!')
-          } else{
-
-            const place = data["operation"]
-            // player dropped cards
-            const dropped_card_str = data['dropped_card']
-            const dropped_card_obj = JSON.parse(dropped_card_str);
-            const dropped_card = { order:dropped_card_obj.order, point:dropped_card_obj.point, name:dropped_card_obj.name, image: dropped_card_obj.image, color: dropped_card_obj.color, text: dropped_card_obj.text }
-            // card player get
-            const new_card_str = data['new_card']
-            const new_card_obj = JSON.parse(new_card_str);
-            const new_card = { order:new_card_obj.order, point:new_card_obj.point, name:new_card_obj.name, image: new_card_obj.image, color: new_card_obj.color, text: new_card_obj.text }
-
-            if (!place || !dropped_card.name || !new_card.name) {
-              return
-            }
-
-            if (place && dropped_card.name && new_card.name) {
-              alreadyHandled = true
-              clearInterval(interval)
-            }
-
-            if (place == 'knock') {
-              handleKnockFromOpp()
-            }
-            else if (place == 'dropzone') {
-              // if (dropZoneRef.current.length > 0) {
-                const newDropZone = [...dropZoneRef.current];
-                const lastCard = newDropZone.pop();
-                // const lastCard = new_card;
-                
-                if (lastCard) {
-                  setDropZoneCards(newDropZone); 
-                  setSendingNewCard('dropzone');
-                  setP1Playing('toDrop');
-                  handleP1PickAndDrop(dropped_card, lastCard);
-              }
-
-            }
-            
-            else if (place == 'stack'){
-                if (remainingCards.length > 0) {
-                  setSendingNewCard('stack');
-                  setP1Playing('toDrop');
-                  handleP1PickAndDrop(dropped_card, new_card)
-                }
-            }
-
-          }
-        }catch (err) {
-          alert(err);
-        }
-      }, 2000);
-    }
 
     function handleP1PickAndDrop(dropCard: Card, newCard: Card) {
     
@@ -810,24 +343,8 @@ useEffect(() => {
       }, 800); 
     }
     
-    async function handleKnockFromOpp() {
-
-      setIsKnocked(true)
-    
-      const res = await fetch(`${backend_url}/api/get_latest_move`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          matchid: matchID,
-          round: currentRound
-        }),
-      });
-    
-      const data = await res.json();
-
-      const myRounds = data.scoreSymmary.rounds.map((round:any) => ({
+    function applyRoundResult(event: RoundResultEvent) {
+      const myRounds = event.scoreSummary.rounds.map((round) => ({
         ...round,
         p1Score: round.p2Score,
         p1Bonus: round.p2Bonus,
@@ -837,38 +354,34 @@ useEffect(() => {
         p2Total: round.p1Total,
       }));
       
-      const myScoreSummary = {
-        p1TotalScore: data.scoreSymmary.p2TotalScore,
-        p2TotalScore: data.scoreSymmary.p1TotalScore,
+      const mirroredScoreSummary: ScoreSummary = {
+        p1TotalScore: event.scoreSummary.p2TotalScore,
+        p2TotalScore: event.scoreSummary.p1TotalScore,
         rounds : myRounds
       }
 
-      setScoreSummary(myScoreSummary);
-      setWhosTurn(data.winner);
+      setIsKnocked(true);
+      setScoreSummary(event.submittedBy === host ? event.scoreSummary : mirroredScoreSummary);
+      setWhosTurn(event.winner);
       setOpen(true);
-
     }
 
     async function handleKnockFromMe() {
-
       setIsKnocked(true)
-
-      console.log('66666666666666666666666666666666666666666666666666666666666666666666');
-      
-      await fetch(`${backend_url}/api/match_move`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          host: host,
-          matchid: matchID,
-          current_host: whosTurn,
+      const socket = connectGameSocket();
+      const knockResponse = await new Promise<{ success: boolean; message: string }>((resolve) => {
+        socket.emit("game:knock", {
+          matchId: matchID,
+          playerId: host as PlayerId,
           round: currentRound,
-          move: 'knock'})
-      })
-      
-      const { newScoreSummary, result, isBigGin } = calculateRoundScore({
+        }, resolve);
+      });
+      if (!knockResponse.success) {
+        alert(knockResponse.message);
+        return;
+      }
+
+      const { newScoreSummary, result } = calculateRoundScore({
         host,
         player1Cards,
         player2Cards,
@@ -878,7 +391,7 @@ useEffect(() => {
       setScoreSummary(newScoreSummary);
 
       if (roomId !== 'tutorial') {
-        let whosNext = ''
+        let whosNext: PlayerId
         if (result === "Undercut") {
           if (host == '0') {
             whosNext = '1'
@@ -894,17 +407,14 @@ useEffect(() => {
         }
         setWhosTurn(whosNext)
 
-        const roundSummaryData = {
-          matchid: matchID,
-          scoreSymmary: newScoreSummary,
+        socket.emit("round:submit-result", {
+          matchId: matchID,
+          playerId: host as PlayerId,
+          scoreSummary: newScoreSummary,
           winner: whosNext,
-          round: currentRound
-        };
-        
-        await fetch(`${backend_url}/api/submit_move`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(roundSummaryData),
+          round: currentRound,
+        }, (response) => {
+          if (!response.success) alert(response.message);
         });
       }
     }
@@ -915,27 +425,107 @@ useEffect(() => {
         resetAll()
       } else {
         setWaitingNextRound(true)
-        await fetch(`${backend_url}/api/set_waiting_next_round`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ matchid: matchID, host, round: currentRound }),
+        const socket = connectGameSocket();
+        socket.emit("round:ready-next", {
+          matchId: matchID,
+          playerId: host as PlayerId,
+          round: currentRound,
+        }, (response) => {
+          if (!response.success) alert(response.message);
         });
-
-        const intervalId = setInterval(async () => {
-          const res = await fetch(`${backend_url}/api/is_both_waiting_next_round`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ matchid: matchID, round: currentRound }),
-          });
-          const data = await res.json();
-          if (data.both_ready) {
-            clearInterval(intervalId);
-            resetAll();               
-          }
-        }, 1000);
       }
 
     }
+
+    useEffect(() => {
+      if (roomId === 'tutorial') return;
+      const socket = connectGameSocket();
+      const resumeRoom = () => {
+        socket.emit("room:resume", {
+          matchId: roomId,
+          playerId: host as PlayerId,
+        }, (response) => {
+          if (!response.success) alert(response.message);
+        });
+      };
+      if (socket.connected) resumeRoom();
+      socket.on("connect", resumeRoom);
+      return () => {
+        socket.off("connect", resumeRoom);
+      };
+    }, [roomId, host]);
+
+    useEffect(() => {
+      const socket = connectGameSocket();
+
+      const onDeal = (state: DealState) => {
+        if (state.playerId === host && (state.matchId === matchID || roomId === 'tutorial')) {
+          applyDeal(state);
+        }
+      };
+      const onOpponentAction = (event: GameOperationEvent) => {
+        if (event.matchId !== matchID || event.playerId === host) return;
+        setRemainingCards(event.remainingCards);
+        if (event.operation === 'dropzone') {
+          const newDropZone = [...dropZoneRef.current];
+          newDropZone.pop();
+          setDropZoneCards(newDropZone);
+          setSendingNewCard('dropzone');
+        } else {
+          setSendingNewCard('stack');
+        }
+        setP1Playing('toDrop');
+        handleP1PickAndDrop(event.droppedCard, event.pickedCard);
+      };
+      const onPassStatus = (event: PassStatusEvent) => {
+        if (event.matchId !== matchID || event.round !== currentRound) return;
+        setPassResult(event.status === 'both-passed' ? 0 : 3);
+        setCurrentPass(event.nextPlayerId === host ? 2 : 1);
+        if (event.status === 'both-passed') {
+          setCurrentPass(null);
+          setP2Playing(event.nextPlayerId === host ? 'toTake' : null);
+          setP1Playing(event.nextPlayerId === host ? null : 'toTake');
+        } else {
+          setP2Playing(event.nextPlayerId === host ? 'passOrPick' : null);
+          setP1Playing(event.nextPlayerId === host ? null : 'passOrPick');
+        }
+      };
+      const onKnocked = (event: { matchId: string; round: number; playerId: PlayerId }) => {
+        if (event.matchId === matchID && event.round === currentRound && event.playerId !== host) {
+          setIsKnocked(true);
+        }
+      };
+      const onRoundResult = (event: RoundResultEvent) => {
+        if (event.matchId === matchID && event.round === currentRound) {
+          applyRoundResult(event);
+        }
+      };
+      const onBothReady = (event: { matchId: string; round: number }) => {
+        if (event.matchId === matchID && event.round === currentRound) resetAll();
+      };
+      const onPlayerLeft = (event: { matchId: string; playerId: PlayerId }) => {
+        if (event.matchId === matchID && event.playerId !== host) {
+          alert("Your opponent disconnected.");
+        }
+      };
+
+      socket.on("game:dealing-started", onDeal);
+      socket.on("game:opponent-action", onOpponentAction);
+      socket.on("game:pass-status", onPassStatus);
+      socket.on("game:knocked", onKnocked);
+      socket.on("round:result", onRoundResult);
+      socket.on("round:both-ready", onBothReady);
+      socket.on("room:player-left", onPlayerLeft);
+      return () => {
+        socket.off("game:dealing-started", onDeal);
+        socket.off("game:opponent-action", onOpponentAction);
+        socket.off("game:pass-status", onPassStatus);
+        socket.off("game:knocked", onKnocked);
+        socket.off("round:result", onRoundResult);
+        socket.off("round:both-ready", onBothReady);
+        socket.off("room:player-left", onPlayerLeft);
+      };
+    }, [matchID, roomId, host, currentRound, player1Cards, whosTurn]);
     
     function DropZone(){
       const [{ isOver }, drop] = useDrop({

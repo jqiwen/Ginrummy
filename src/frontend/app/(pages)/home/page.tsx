@@ -22,9 +22,6 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 
 export default function homePage() {
 
-    const backend_url = process.env.BACKEND_URL || "https://backend.ginrummys.ca";
-    // const backend_url = "http://localhost:8080";
-
     // 不要删
     // const dispatch = useDispatch<AppDispatch>();
     // const user = useSelector((state: RootState) => state.user);

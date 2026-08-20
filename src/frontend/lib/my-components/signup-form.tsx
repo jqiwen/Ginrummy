@@ -21,9 +21,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { useEffect } from "react";
-
-const backend_url = process.env.BACKEND_URL || "https://backend.ginrummys.ca";
+import { authSignup } from "@/lib/socket";
 const formSchema = z
   .object({
     username: z.string().min(2, {
@@ -56,39 +54,26 @@ export function SignUpForm() {
   })
  
   // 2. Define a submit handler.
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     console.log(values)
     console.log("sign up success")
     // On submit, send a POST request to backend server to communicate the request.
-    fetch(`${backend_url}/api/signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        username: values.username,
-        nickname: values.nickname,
-        password: values.password,})
-    })
-    .then((response) => response.json())
-    .then((data) => {
-      if (data["result"] == 0) {
+    const data = await authSignup(values.username, values.password);
+      if (data.code == 0) {
         dispatch(setUserInfo({ username: values.username }));
         router.push("/home");
       }
-      else if (data["result"] == 1) {
+      else if (data.code == 1) {
         // TODO: show error message
         console.log("username already exists")
         alert("username already exists")
       }
       else {
         console.log("sign up failed")
-        console.log(data["message"])
+        console.log(data.message)
         // TODO: show error message
-        alert(data["message"])
+        alert(data.message)
       }
-    })
-    
   }
 
   return (
