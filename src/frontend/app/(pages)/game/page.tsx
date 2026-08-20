@@ -68,25 +68,8 @@ function GameContent() {
     return (
         <div className="h-full w-full flex flex-col relative">
             <HeaderBar />
-            {showRefreshWarning && (
-                <div className="relative bg-yellow-100 text-yellow-800 font-semibold text-center py-2 px-4 shadow-md border-b border-yellow-300 z-10">
-                    ❗ Please do not refresh this page during the game.
 
-                    {/* 关闭按钮 */}
-                    <button
-                    onClick={() => setShowRefreshWarning(false)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-yellow-800 hover:text-red-600 text-lg font-bold"
-                    aria-label="Close warning"
-                    >
-                    ✕
-                    </button>
-                </div>
-                )}
-            <div className="flex w-full h-[600px] pt-2 py-4 px-4 transition-all duration-500 ease-in-out" style={{
-    minHeight: showRefreshWarning
-      ? "calc(100vh - 102px)"
-      : "calc(100vh - 52px)",
-  }}>
+            <div className="flex w-full h-[600px] pt-2 py-4 px-4 transition-all duration-500 ease-in-out" >
                 {/* Left Drawer */}
                 <div
                     className={`bg-gray-100 h-full  transition-all duration-500 ease-in-out flex ${
