@@ -1,0 +1,19 @@
+[project]
+name = "gin-rummy-twist-server"
+version = "0.1.0"
+description = "Online Card Game"
+package-mode = false
+authors = [
+    {name = "Chenrui Hao",email = "erichaocr@gmail.com"}
+]
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "flask (>=3.1.0,<4.0.0)",
+    "flask-cors (>=5.0.1,<6.0.0)",
+    "gunicorn (>=23.0.0,<24.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
