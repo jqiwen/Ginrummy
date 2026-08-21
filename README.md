@@ -4,7 +4,7 @@ A real-time multiplayer Gin Rummy web game built with **Next.js, TypeScript, Soc
 
 Unlike standard Gin Rummy, this version uses a **base-12 (dozenal) card system** with a 64-card deck, introducing a different scoring model and game strategy while keeping the core draw, discard, knock, and round mechanics of Gin Rummy.
 
-**Live Demo:** `ginrummy.jqiwen.com`
+🌐 **Live Site:** [Play Gin Rummy](https://ginrummy.jqiwen.com)
 
 ---
 
@@ -62,33 +62,17 @@ Game rules and scoring logic are handled by the backend so clients cannot direct
 * Rule reference available directly from the game interface
 
 ---
+## Tech Stack
 
-# Tech Stack
+**Frontend**
+`Next.js` `React` `TypeScript` `Redux` `shadcn/ui`
 
-## Frontend
+**Backend**
+`Node.js` `TypeScript` `Socket.IO` `WebSocket`
 
-* **Next.js**
-* **React**
-* **TypeScript**
-* **Redux**
-* **shadcn/ui**
-* CSS
+**Cloud & DevOps**
+`Google Cloud Run` `GitHub Pages` `GitHub Actions` `Cloud Build` `Artifact Registry`
 
-## Backend
-
-* **Node.js**
-* **TypeScript**
-* **Socket.IO**
-* WebSocket
-* In-memory game state
-
-## Cloud & DevOps
-
-* **Google Cloud Run**
-* **GitHub Pages**
-* **GitHub Actions**
-* **Cloud Build**
-* **Artifact Registry**
 
 ---
 
