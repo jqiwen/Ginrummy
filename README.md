@@ -39,7 +39,7 @@ See [docs/MIGRATION_MAPPING.md](docs/MIGRATION_MAPPING.md) for the REST-to-WebSo
 
 ## Deployment architecture
 
-Production uses a static Next.js export at `https://jqiwen.github.io/ginrummy/`. Browser clients connect directly over Socket.IO/WebSocket to the public HTTPS URL of the `ginrummy-game-service` Cloud Run service. Socket.IO selects secure WebSocket (`wss://`) automatically when `NEXT_PUBLIC_GAME_WS_URL` is an `https://` URL.
+Production uses a static Next.js export at `https://ginrummy.jqiwen.com`. Browser clients connect directly over Socket.IO/WebSocket to the public HTTPS URL of the `ginrummy-game-service` Cloud Run service. Socket.IO selects secure WebSocket (`wss://`) automatically when `NEXT_PUBLIC_GAME_WS_URL` is an `https://` URL.
 
 Local development remains:
 
@@ -166,7 +166,7 @@ Continue only after it returns:
 5. Open **Settings -> Pages**.
 6. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 7. Push the deployment changes to `master`, or manually run **Deploy frontend to GitHub Pages** from the Actions tab.
-8. Confirm the deployment environment reports `https://jqiwen.github.io/ginrummy/`.
+8. Confirm the deployment environment reports `https://ginrummy.jqiwen.com`.
 
 The workflow exposes the repository variable only during the frontend build:
 
@@ -180,7 +180,7 @@ It runs `npm ci`, builds the static export in `src/frontend/out`, uploads that d
 
 Health alone does not validate the real-time game. Use two separate browser windows, preferably one normal and one incognito:
 
-1. Open `https://jqiwen.github.io/ginrummy/` in both windows.
+1. Open `https://ginrummy.jqiwen.com` in both windows.
 2. Player A creates a room and copies the room ID.
 3. Player B joins that room.
 4. Verify both players see the join and Player A can start the game.
