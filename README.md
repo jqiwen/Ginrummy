@@ -83,22 +83,6 @@ The service runs locally on:
 localhost:8080
 ```
 
-You can verify it with:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok"
-}
-```
-
----
-
 ## 2. Start the Frontend
 
 Open another terminal:
@@ -113,12 +97,6 @@ The frontend runs on:
 
 ```text
 localhost:3000
-```
-
-For local development, configure:
-
-```env
-NEXT_PUBLIC_GAME_WS_URL=http://localhost:8080
 ```
 
 ---
