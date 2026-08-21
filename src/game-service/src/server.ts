@@ -33,7 +33,7 @@ export function createGameService(store: GameStore = gameStore): GameService {
 
   const origins = [
     "http://localhost:3000",
-    "https://jqiwen.github.io",
+    ""https://ginrummy.jqiwen.com",
     ...(process.env.FRONTEND_ORIGIN ?? "").split(","),
   ]
     .map((origin) => origin.trim())

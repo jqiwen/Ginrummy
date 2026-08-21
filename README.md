@@ -120,7 +120,7 @@ gcloud run deploy ginrummy-game-service \
   --min-instances 0 \
   --max-instances 1 \
   --session-affinity \
-  --set-env-vars FRONTEND_ORIGIN=https://jqiwen.github.io
+  --set-env-vars FRONTEND_ORIGIN=https://ginrummy.jqiwen.com
 ```
 
 This keeps the service public for browser clients and cost-conscious for a portfolio project. `min instances = 0` permits scale-to-zero, so the first connection after idle time may remain in a temporary connecting state while Cloud Run starts the container. The Socket.IO client logs `connect`, `disconnect`, `connect_error`, `reconnect_attempt`, and `reconnect` events and automatically reconnects.
@@ -217,7 +217,7 @@ PORT=8080
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
-Cloud Run supplies `PORT` automatically. The deployment command sets `FRONTEND_ORIGIN=https://jqiwen.github.io`. The service also permits `http://localhost:3000` so local development continues to work. No runtime credentials are required or committed.
+Cloud Run supplies `PORT` automatically. The deployment command sets `FRONTEND_ORIGIN=https://ginrummy.jqiwen.com`. The service also permits `http://localhost:3000` so local development continues to work. No runtime credentials are required or committed.
 
 ## Acknowledgments
 Special thanks to Professor Paul Rapoport for his guidance on game rules and mechanics, and to all team members for their hard work in bringing this project to life.
