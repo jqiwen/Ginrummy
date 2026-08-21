@@ -51,16 +51,6 @@ The project implements a custom **base-12 Gin Rummy variant** using a 64-card de
 
 Game rules and scoring logic are handled by the backend so clients cannot directly modify the authoritative match state.
 
-### Interactive Frontend
-
-* Card selection and interaction
-* Game room creation and joining
-* Dynamic player and opponent states
-* Turn indicators
-* Draw and discard piles
-* Responsive game status updates
-* Rule reference available directly from the game interface
-
 ---
 ## Tech Stack
 
