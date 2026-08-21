@@ -10,9 +10,6 @@ import { Button } from "@/components/ui/button"
 import { Card,PlayerSummary } from '../models/card-animation.model';
 import GinRummyScore from './logics/calc-score';
 
-import { calculateLayingOff } from './logics/laying-off';
-import { calculateRoundScore } from './logics/calc-knock';
-
 import {
   Dialog,
   DialogContent,
@@ -20,13 +17,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 import { ScoreSummary,playingStatus,passingStatus,sendingNewCardPlace } from '../models/card-animation.model';
 import { DraggableCard} from './drag-card'
-import { decimalToDozenal } from './logics/count-dozenal';
+import { CARDS_PER_HAND, KNOCK_THRESHOLD, MATCH_TARGET, formatDozenal } from '../game/rules';
 import { AvatarDisplay,ChatBubble  } from '@my-components/avatar'
 import GameOverOverlay from './game-end-overlay'
 import { publicAssetPath } from '../publicAsset';
@@ -72,8 +68,24 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
 
   const [isKnocked, setIsKnocked] = useState<boolean>(false)
   const [showDeadwoods, setShowDeadwoods] = useState<boolean>(false)
+  const [canKnockAfterDiscard, setCanKnockAfterDiscard] = useState(false)
 
   const hasHandledP1Play = useRef(false);
+
+  const myDeadwood = player2Cards.DeadwoodsPoint;
+  const canDeclareBigGin = p2Playing === 'toDrop'
+    && player2Cards.cards.length === CARDS_PER_HAND + 1
+    && myDeadwood === 0;
+  const canDeclareNormalKnock = canKnockAfterDiscard
+    && player2Cards.cards.length === CARDS_PER_HAND
+    && myDeadwood !== undefined
+    && myDeadwood <= KNOCK_THRESHOLD;
+  const canDeclare = canDeclareBigGin || canDeclareNormalKnock;
+  const declarationLabel = canDeclareBigGin ? 'BIG GIN' : myDeadwood === 0 ? 'GIN' : 'KNOCK';
+  const latestRound = scoreSummary?.rounds[scoreSummary.rounds.length - 1];
+  const latestWinnerTotal = latestRound
+    ? (whosTurn === host ? latestRound.p2Total : latestRound.p1Total)
+    : 0;
 
   // const [actualPlayer, setActualPlayer] = useState("")
 
@@ -125,6 +137,7 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
     setPlayer1Cards(GinRummyScore(state.opponentCards));
     setPlayer2Cards(GinRummyScore(state.ownCards));
     setRemainingCards(state.remainingCards);
+    setCanKnockAfterDiscard(false);
     setDealing(true);
     setTimeout(() => {
       setShowDeadwoods(true);
@@ -156,6 +169,7 @@ useEffect(() => {
     setIsKnocked(false)
     setShowDeadwoods(false);
     setPassResult(null)
+    setCanKnockAfterDiscard(false)
 
     const nextRound = currentRound + 1
     setCurrentRound(nextRound)
@@ -172,6 +186,7 @@ useEffect(() => {
 
 
   async function get_card_from_stack(is_P2: boolean){
+    setCanKnockAfterDiscard(false);
     const socket = connectGameSocket();
     socket.emit("game:draw-stack", {
       matchId: matchID,
@@ -201,6 +216,7 @@ useEffect(() => {
 }, [dealing]);
 
     function handlePass() {
+      setCanKnockAfterDiscard(false);
       setP2Playing(null);
       setP1Playing('toTake')
       const socket = connectGameSocket();
@@ -248,6 +264,7 @@ useEffect(() => {
     // P2从dropzone拿 下一张牌
     // dropzone拿牌规则：LIFO，新牌添加在最后，pop取出，显示是从后往前显示
     async function handleDropZone(){
+      setCanKnockAfterDiscard(false);
       setPassResult(null)
       if (p2Playing == 'toTake' || currentPass == 2){
         if (currentPass == 2) {
@@ -309,7 +326,13 @@ useEffect(() => {
             setLastPickedCard(null)
             const updatedCards = [...player2Cards.cards];
             updatedCards.splice(item.index, 1);
-            setPlayer2Cards(GinRummyScore(updatedCards));
+            const updatedSummary = GinRummyScore(updatedCards);
+            setPlayer2Cards(updatedSummary);
+            setCanKnockAfterDiscard(
+              updatedSummary.cards.length === CARDS_PER_HAND
+              && updatedSummary.DeadwoodsPoint !== undefined
+              && updatedSummary.DeadwoodsPoint <= KNOCK_THRESHOLD,
+            );
             setP1Playing("toTake")
             setP2Playing(null)
           });
@@ -362,13 +385,13 @@ useEffect(() => {
       }
 
       setIsKnocked(true);
-      setScoreSummary(event.submittedBy === host ? event.scoreSummary : mirroredScoreSummary);
+      setScoreSummary(host === '1' ? event.scoreSummary : mirroredScoreSummary);
       setWhosTurn(event.winner);
       setOpen(true);
     }
 
     async function handleKnockFromMe() {
-      setIsKnocked(true)
+      if (!canDeclare) return;
       const socket = connectGameSocket();
       const knockResponse = await new Promise<{ success: boolean; message: string }>((resolve) => {
         socket.emit("game:knock", {
@@ -381,43 +404,10 @@ useEffect(() => {
         alert(knockResponse.message);
         return;
       }
+      setIsKnocked(true)
+      setCanKnockAfterDiscard(false)
+      setOpen(true)
 
-      const { newScoreSummary, result } = calculateRoundScore({
-        host,
-        player1Cards,
-        player2Cards,
-        scoreSummary:scoreSummary ?? null,
-      });
-
-      setScoreSummary(newScoreSummary);
-
-      if (roomId !== 'tutorial') {
-        let whosNext: PlayerId
-        if (result === "Undercut") {
-          if (host == '0') {
-            whosNext = '1'
-          } else {
-            whosNext = '0'
-          }
-        } else {
-          if (host == '0') {
-            whosNext ='0'
-          } else {
-            whosNext = '1'
-          }
-        }
-        setWhosTurn(whosNext)
-
-        socket.emit("round:submit-result", {
-          matchId: matchID,
-          playerId: host as PlayerId,
-          scoreSummary: newScoreSummary,
-          winner: whosNext,
-          round: currentRound,
-        }, (response) => {
-          if (!response.success) alert(response.message);
-        });
-      }
     }
     
     
@@ -466,6 +456,7 @@ useEffect(() => {
       };
       const onOpponentAction = (event: GameOperationEvent) => {
         if (event.matchId !== matchID || event.playerId === host) return;
+        setCanKnockAfterDiscard(false);
         setRemainingCards(event.remainingCards);
         if (event.operation === 'dropzone') {
           const newDropZone = [...dropZoneRef.current];
@@ -477,6 +468,11 @@ useEffect(() => {
         }
         setP1Playing('toDrop');
         handleP1PickAndDrop(event.droppedCard, event.pickedCard);
+      };
+      const onOpponentDrew = (event: { matchId: string; playerId: PlayerId }) => {
+        if (event.matchId === matchID && event.playerId !== host) {
+          setCanKnockAfterDiscard(false);
+        }
       };
       const onPassStatus = (event: PassStatusEvent) => {
         if (event.matchId !== matchID || event.round !== currentRound) return;
@@ -512,6 +508,7 @@ useEffect(() => {
 
       socket.on("game:dealing-started", onDeal);
       socket.on("game:opponent-action", onOpponentAction);
+      socket.on("game:opponent-drew", onOpponentDrew);
       socket.on("game:pass-status", onPassStatus);
       socket.on("game:knocked", onKnocked);
       socket.on("round:result", onRoundResult);
@@ -520,6 +517,7 @@ useEffect(() => {
       return () => {
         socket.off("game:dealing-started", onDeal);
         socket.off("game:opponent-action", onOpponentAction);
+        socket.off("game:opponent-drew", onOpponentDrew);
         socket.off("game:pass-status", onPassStatus);
         socket.off("game:knocked", onKnocked);
         socket.off("round:result", onRoundResult);
@@ -816,7 +814,7 @@ useEffect(() => {
 
             <div className="px-2 py-1 flex flex-row items-center rounded-lg bg-gray-300 text-gray-700 shadow-xl bg-opacity-60 mt-4">
               <div className="flex items-center space-x-2">
-                <span>Deadwood ({player2Cards.DeadwoodsDozenalPoint}):</span>
+                <span>Deadwood ({formatDozenal(player2Cards.DeadwoodsPoint ?? 0)}):</span>
                 <div className="flex flex-row space-x-2">
                   {player2Cards.Deadwoods?.map((card, index) => (
                     <div key={index} className={`font-black ${card.color}`}>
@@ -897,28 +895,38 @@ useEffect(() => {
           )}
 
           {dealing &&(
-            <Dialog open={open} onOpenChange={(v) => setOpen(true)}>
-              <DialogTrigger asChild>
-                 <div className="absolute w-[80px] h-[80px] flex items-center justify-center bg-red-500 text-white font-semibold shadow-xl cursor-pointer hover:bg-red-600"
+            <Dialog open={open} onOpenChange={setOpen}>
+              {canDeclare && (
+                 <button
+                      type="button"
+                      className="absolute flex h-[84px] w-[84px] cursor-pointer items-center justify-center rounded-full border-2 border-[#f8df9a] bg-[#a91d1d] text-center text-sm font-bold text-white shadow-xl transition hover:scale-105 hover:bg-[#c32626] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#f8df9a]/60"
                       style={{
                         top: '50%',
                         transform: 'translateY(-50%)',
                         whiteSpace: 'nowrap',
                         left: 'calc(50% + 500px)',
-                        borderRadius:'50%',
-                        backgroundColor: player2Cards.DeadwoodsPoint !== undefined && player2Cards.DeadwoodsPoint <= 12 ? 'red' : 'gray',
-                        pointerEvents: player2Cards.DeadwoodsPoint !== undefined && player2Cards.DeadwoodsPoint <= 12 ? 'auto' : 'none',
                       }}
                       onClick={() => {handleKnockFromMe();}}
+                      aria-label={`Declare ${declarationLabel}`}
                     >
-                      KNOCK
-                  </div>
-              </DialogTrigger>
+                      {declarationLabel}
+                  </button>
+              )}
             {!waitingNextRound ? (
               <DialogContent className="[&>button]:hidden">
                 <DialogHeader>
-                  <DialogTitle className="flex flex-col items-center justify-center">
-                    {whosTurn == host ? "You win this round 😊 " : "You lose this round 😢"}
+                  <DialogTitle className="flex flex-col items-center justify-center gap-1">
+                    {latestRound && (
+                      <span className="font-serif text-3xl font-extrabold uppercase text-[#173728]">
+                        {latestRound.result}!
+                      </span>
+                    )}
+                    {latestRound && latestWinnerTotal > 0 && (
+                      <span className="text-lg font-semibold text-[#8b1f1f]">+{formatDozenal(latestWinnerTotal)}</span>
+                    )}
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {whosTurn == host ? "You win this round 😊" : "You lose this round 😢"}
+                    </span>
                   </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -950,12 +958,12 @@ useEffect(() => {
                       {scoreSummary && scoreSummary.rounds.map((round, index) => (
                               <TableRow key={index}>
                                 <TableCell className="text-center">{round.round }</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p1Score || 0)}</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p1Bonus || 0)}</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p1Total || 0)}</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p2Score || 0)}</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p2Bonus || 0)}</TableCell>
-                                <TableCell className="text-center">{decimalToDozenal(round.p2Total || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p1Score || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p1Bonus || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p1Total || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p2Score || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p2Bonus || 0)}</TableCell>
+                                <TableCell className="text-center">{formatDozenal(round.p2Total || 0)}</TableCell>
                                 <TableCell className="text-center">{round.result}</TableCell>
                               </TableRow>
                             ))}
@@ -964,11 +972,11 @@ useEffect(() => {
                               {/* <TableCell className="text-center">{decimalToDozenal(scoreSummary?.p1TotalScore || 0) }</TableCell> */}
                               <TableCell className="text-center"></TableCell>
                               <TableCell className="text-center"></TableCell>
-                              <TableCell className="text-center">{decimalToDozenal(scoreSummary?.p1TotalScore || 0)}</TableCell>
+                              <TableCell className="text-center">{formatDozenal(scoreSummary?.p1TotalScore || 0)}</TableCell>
                               {/* <TableCell className="text-center">{decimalToDozenal(scoreSummary?.p2TotalScore || 0)}</TableCell> */}
                               <TableCell className="text-center"></TableCell>
                               <TableCell className="text-center"></TableCell>
-                              <TableCell className="text-center">{decimalToDozenal(scoreSummary?.p2TotalScore || 0)}</TableCell>
+                              <TableCell className="text-center">{formatDozenal(scoreSummary?.p2TotalScore || 0)}</TableCell>
                               <TableCell className="text-center"></TableCell>
                             </TableRow>
                     </TableBody>
@@ -1011,25 +1019,11 @@ useEffect(() => {
       </div>
 
 
-      {scoreSummary && (scoreSummary.p1TotalScore >= 144 || scoreSummary.p2TotalScore >= 144) && (
+      {scoreSummary && (scoreSummary.p1TotalScore >= MATCH_TARGET || scoreSummary.p2TotalScore >= MATCH_TARGET) && (
         <GameOverOverlay
-          isWin={(() => {
-            let winner
-            if (scoreSummary.p1TotalScore >= 144) {
-              winner = '1'
-            } else {
-              winner = '0'
-            }
-            const isHost = host === winner;
-            return (isHost && scoreSummary.p1TotalScore >= 144) || (!isHost && scoreSummary.p2TotalScore >= 144);
-          })()}
-          p1TotalScore={scoreSummary.p1TotalScore}
-          p2TotalScore={scoreSummary.p2TotalScore}
+          isWin={scoreSummary.p2TotalScore >= MATCH_TARGET}
           scoreSummary={scoreSummary}
-          host={host}
-          whosTurn={whosTurn}
           roomId={roomId}
-          decimalToDozenal={decimalToDozenal}
         />
       )}
     </DndProvider>

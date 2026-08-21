@@ -106,6 +106,7 @@ export interface ServerToClientEvents {
   "game:started": (event: GameStartedEvent) => void;
   "game:dealing-started": (state: DealState) => void;
   "game:card-drawn": (event: PlayerMatchPayload & DrawResult) => void;
+  "game:opponent-drew": (event: PlayerPresenceEvent) => void;
   "game:card-discarded": (event: PlayerMatchPayload & { card: Card }) => void;
   "game:opponent-action": (event: MatchPayload & GameOperation) => void;
   "game:player-passed": (event: RoundPayload) => void;

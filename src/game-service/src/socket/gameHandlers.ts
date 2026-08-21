@@ -1,6 +1,7 @@
 import type { Server } from "socket.io";
 import { otherPlayer, type DealState, type GameOperation, type PlayerId } from "../game/gameTypes.js";
-import { calculateRoundScore, previousScoreSummary } from "../game/Scoring.js";
+import { calculateRoundScore, canKnock } from "../game/Scoring.js";
+import { CARDS_PER_HAND } from "../game/RuleConstants.js";
 import { gameStore, GameStore, type RoomState, StoreError } from "../state/gameStore.js";
 import type {
   ClientToServerEvents,
@@ -82,7 +83,13 @@ function scheduleBotTurn(io: GameServer, room: RoomState): void {
   if (!room.bot || room.turn !== "0" || room.phase !== "draw") {
     return;
   }
+  const previousPlayer = otherPlayer(room.turn);
+  const knockWindow = room.match.latestPlayer === previousPlayer
+    && canKnock(room.match.getHand(previousPlayer));
   setTimeout(() => {
+    if (room.turn !== "0" || room.phase !== "draw") {
+      return;
+    }
     try {
       const operation = room.match.performBotTurn();
       room.phase = "draw";
@@ -98,7 +105,7 @@ function scheduleBotTurn(io: GameServer, room: RoomState): void {
         message: error instanceof Error ? error.message : "Bot turn failed",
       });
     }
-  }, 400);
+  }, knockWindow ? 2_000 : 400);
 }
 
 export function registerGameHandlers(
@@ -170,6 +177,7 @@ export function registerGameHandlers(
       const data = { card, remainingCards: room.match.getRemainingCards() };
       ack(ok(0, "OK", data));
       socket.emit("game:card-drawn", { matchId: room.matchId, playerId, ...data });
+      socket.to(room.matchId).emit("game:opponent-drew", { matchId: room.matchId, playerId });
     } catch (error) {
       handleError(socket, ack, error);
     }
@@ -191,6 +199,7 @@ export function registerGameHandlers(
       const data = { card, remainingCards: room.match.getRemainingCards() };
       ack(ok(0, "OK", data));
       socket.emit("game:card-drawn", { matchId: room.matchId, playerId, ...data });
+      socket.to(room.matchId).emit("game:opponent-drew", { matchId: room.matchId, playerId });
     } catch (error) {
       handleError(socket, ack, error);
     }
@@ -292,14 +301,45 @@ export function registerGameHandlers(
         throw new StoreError(1, "Malformed knock payload");
       }
       const round = requireCurrentRound(room, payload.round);
-      const handLength = room.match.getHand(playerId).length;
-      if (handLength !== 12 && handLength !== 13) {
-        throw new StoreError(1, "A player can only knock with a complete hand or Big Gin");
+      const hand = room.match.getHand(playerId);
+      const handLength = hand.length;
+      const isBigGinWindow = handLength === CARDS_PER_HAND + 1
+        && room.phase === "discard"
+        && room.turn === playerId
+        && room.pendingDraw?.playerId === playerId;
+      const isNormalKnockWindow = handLength === CARDS_PER_HAND
+        && room.phase === "draw"
+        && room.turn === otherPlayer(playerId)
+        && room.match.latestPlayer === playerId
+        && (room.match.latestOperation === "stack" || room.match.latestOperation === "dropzone");
+      if (!isBigGinWindow && !isNormalKnockWindow) {
+        throw new StoreError(1, "Knock is only allowed after your discard, or immediately on Big Gin");
+      }
+      if (!canKnock(hand)) {
+        throw new StoreError(1, handLength === CARDS_PER_HAND + 1
+          ? "Big Gin requires all 13 cards to be melded"
+          : "Deadwood must be 10₁₂ or less to knock");
       }
       room.match.knockCard(playerId);
       room.phase = "round-over";
+      const scored = calculateRoundScore(
+        playerId,
+        hand,
+        room.match.getHand(otherPlayer(playerId)),
+        room.scoreSummary,
+      );
+      const result = {
+        matchId,
+        round,
+        submittedBy: playerId,
+        winner: scored.winner,
+        scoreSummary: scored.scoreSummary,
+      };
+      room.scoreSummary = scored.scoreSummary;
+      room.roundResults.set(round, result);
       ack(ok(0, "Knock received"));
       socket.to(matchId).emit("game:knocked", { matchId, round, playerId });
+      io.to(matchId).emit("round:result", result);
     } catch (error) {
       handleError(socket, ack, error);
     }
@@ -307,34 +347,21 @@ export function registerGameHandlers(
 
   socket.on("round:submit-result", (payload, ack) => {
     try {
-      const { room, matchId, playerId } = requirePlayerPayload(store, socket, payload);
+      const { room, playerId } = requirePlayerPayload(store, socket, payload);
       if (!isRecord(payload) || !isPlayerId(payload.winner) || !isRecord(payload.scoreSummary)) {
         throw new StoreError(1, "Malformed round result payload");
       }
       const round = requireCurrentRound(room, payload.round);
-      const expected = calculateRoundScore(
-        playerId,
-        room.match.getHand(playerId),
-        room.match.getHand(otherPlayer(playerId)),
-        previousScoreSummary(payload.scoreSummary),
-      );
-      if (
-        expected.winner !== payload.winner
-        || JSON.stringify(expected.scoreSummary) !== JSON.stringify(payload.scoreSummary)
-      ) {
-        throw new StoreError(1, "Round result does not match authoritative game state");
+      if (room.phase !== "round-over"
+        || room.match.latestOperation !== "knock"
+        || room.match.latestPlayer !== playerId) {
+        throw new StoreError(1, "A round result can only be submitted by the player who knocked");
       }
-      const result = {
-        matchId,
-        round,
-        submittedBy: playerId,
-        winner: expected.winner,
-        scoreSummary: expected.scoreSummary,
-      };
-      room.roundResults.set(round, result);
-      room.phase = "round-over";
-      ack(ok(0, "Move submitted"));
-      io.to(matchId).emit("round:result", result);
+      const result = room.roundResults.get(round);
+      if (!result) {
+        throw new StoreError(1, "The server has not finalized this round");
+      }
+      ack(ok(0, "Round result already finalized by the server"));
     } catch (error) {
       handleError(socket, ack, error);
     }

@@ -1,10 +1,26 @@
 import type { Card, PlayerId, ScoreRound, ScoreSummary } from "./gameTypes.js";
 import { otherPlayer } from "./gameTypes.js";
+import {
+  BIG_GIN_BONUS,
+  CARDS_PER_HAND,
+  GIN_BONUS,
+  KNOCK_THRESHOLD,
+  MAX_SET_SIZE,
+  MIN_MELD_SIZE,
+  UNDERCUT_BONUS,
+} from "./RuleConstants.js";
 
-interface HandSummary {
+export interface HandSummary {
   cards: Card[];
+  meldGroups: Card[][];
   melds: Card[];
   deadwoods: Card[];
+  deadwoodPoint: number;
+}
+
+export interface LayoffSummary {
+  deadwoods: Card[];
+  laidOff: Card[];
   deadwoodPoint: number;
 }
 
@@ -12,6 +28,10 @@ interface RoundScoreResult {
   scoreSummary: ScoreSummary;
   result: "Knock" | "Gin" | "Big Gin" | "Undercut";
   winner: PlayerId;
+}
+
+function suitOf(card: Card): string {
+  return card.name.split("-")[0] ?? "";
 }
 
 function combinations(cards: Card[], size: number): Card[][] {
@@ -27,31 +47,46 @@ function combinations(cards: Card[], size: number): Card[][] {
   return result;
 }
 
+export function isValidSet(cards: readonly Card[]): boolean {
+  if (cards.length < MIN_MELD_SIZE || cards.length > MAX_SET_SIZE) return false;
+  const names = new Set(cards.map((card) => card.name));
+  const suits = new Set(cards.map(suitOf));
+  return names.size === cards.length
+    && suits.size === cards.length
+    && cards.every((card) => card.order === cards[0]?.order);
+}
+
+export function isValidRun(cards: readonly Card[]): boolean {
+  if (cards.length < MIN_MELD_SIZE) return false;
+  const names = new Set(cards.map((card) => card.name));
+  if (names.size !== cards.length || new Set(cards.map(suitOf)).size !== 1) return false;
+  const sorted = [...cards].sort((left, right) => left.order - right.order);
+  return sorted.every((card, index) => index === 0 || card.order === sorted[index - 1]!.order + 1);
+}
+
 export function calculateHandSummary(inputCards: readonly Card[]): HandSummary {
   const cards = inputCards.map((card) => ({ ...card }));
   const suits = new Map<string, Card[]>();
-  const ranks = new Map<string, Card[]>();
+  const ranks = new Map<number, Card[]>();
 
   for (const card of cards) {
-    const [suit = "", rank = ""] = card.name.split("-");
+    const suit = suitOf(card);
     suits.set(suit, [...(suits.get(suit) ?? []), card]);
-    ranks.set(rank, [...(ranks.get(rank) ?? []), card]);
+    ranks.set(card.order, [...(ranks.get(card.order) ?? []), card]);
   }
 
   const runs: Card[][] = [];
   for (const suitedCards of suits.values()) {
-    const sorted = [...suitedCards].sort((left, right) => left.order - right.order);
+    const sorted = [...new Map(suitedCards.map((card) => [card.name, card])).values()]
+      .sort((left, right) => left.order - right.order);
     for (let start = 0; start < sorted.length; start += 1) {
-      const first = sorted[start];
-      if (!first) continue;
-      const run = [first];
+      const run = [sorted[start]!];
       for (let index = start + 1; index < sorted.length; index += 1) {
-        const previous = run.at(-1);
-        const current = sorted[index];
-        if (!previous || !current) continue;
+        const current = sorted[index]!;
+        const previous = run.at(-1)!;
         if (current.order === previous.order + 1) {
           run.push(current);
-          if (run.length >= 3) runs.push([...run]);
+          if (isValidRun(run)) runs.push([...run]);
         } else if (current.order > previous.order + 1) {
           break;
         }
@@ -61,93 +96,99 @@ export function calculateHandSummary(inputCards: readonly Card[]): HandSummary {
 
   const sets: Card[][] = [];
   for (const rankedCards of ranks.values()) {
-    if (rankedCards.length < 3) continue;
-    for (let size = 3; size <= rankedCards.length; size += 1) {
-      sets.push(...combinations(rankedCards, size));
+    const uniqueCards = [...new Map(rankedCards.map((card) => [suitOf(card), card])).values()];
+    for (let size = MIN_MELD_SIZE; size <= Math.min(MAX_SET_SIZE, uniqueCards.length); size += 1) {
+      sets.push(...combinations(uniqueCards, size).filter(isValidSet));
     }
   }
 
   const candidates = [...runs, ...sets];
-  let bestMelds: Card[][] = [];
-  let bestDeadwood = Number.POSITIVE_INFINITY;
+  let bestMeldGroups: Card[][] = [];
+  let bestDeadwood = cards.reduce((sum, card) => sum + card.point, 0);
 
-  const explore = (melds: Card[][], used: Set<string>, index: number): void => {
+  const explore = (meldGroups: Card[][], used: Set<string>, index: number): void => {
     if (index === candidates.length) {
-      const deadwoods = cards.filter((card) => !used.has(card.name));
-      const deadwoodPoint = deadwoods.reduce((sum, card) => sum + card.point, 0);
-      const meldCardCount = melds.flat().length;
-      if (
-        deadwoodPoint < bestDeadwood
-        || (deadwoodPoint === bestDeadwood && meldCardCount > bestMelds.flat().length)
-      ) {
+      const deadwoodPoint = cards
+        .filter((card) => !used.has(card.name))
+        .reduce((sum, card) => sum + card.point, 0);
+      const meldCardCount = meldGroups.reduce((sum, meld) => sum + meld.length, 0);
+      const bestMeldCardCount = bestMeldGroups.reduce((sum, meld) => sum + meld.length, 0);
+      if (deadwoodPoint < bestDeadwood
+        || (deadwoodPoint === bestDeadwood && meldCardCount > bestMeldCardCount)) {
         bestDeadwood = deadwoodPoint;
-        bestMelds = [...melds];
+        bestMeldGroups = [...meldGroups];
       }
       return;
     }
 
-    explore(melds, used, index + 1);
-    const candidate = candidates[index];
-    if (!candidate || candidate.some((card) => used.has(card.name))) return;
+    explore(meldGroups, used, index + 1);
+    const candidate = candidates[index]!;
+    if (candidate.some((card) => used.has(card.name))) return;
     const nextUsed = new Set(used);
     candidate.forEach((card) => nextUsed.add(card.name));
-    explore([...melds, candidate], nextUsed, index + 1);
+    explore([...meldGroups, candidate], nextUsed, index + 1);
   };
 
   explore([], new Set<string>(), 0);
-  const melds = bestMelds.flat();
+  const melds = bestMeldGroups.flat();
   const used = new Set(melds.map((card) => card.name));
   const deadwoods = cards.filter((card) => !used.has(card.name));
-  return { cards, melds, deadwoods, deadwoodPoint: bestDeadwood };
+  return { cards, meldGroups: bestMeldGroups, melds, deadwoods, deadwoodPoint: bestDeadwood };
 }
 
-function calculateLayingOff(deadwoods: readonly Card[], melds: readonly Card[]): number {
-  const setsByRank = new Map<string, Set<string>>();
-  const runsBySuit = new Map<string, Set<number>>();
-
-  for (const card of melds) {
-    const [suit = "", rank = ""] = card.name.split("-");
-    const suits = setsByRank.get(rank) ?? new Set<string>();
-    suits.add(suit);
-    setsByRank.set(rank, suits);
-
-    const rankNumber = Number.parseInt(rank, 16);
-    if (!Number.isNaN(rankNumber)) {
-      const ranks = runsBySuit.get(suit) ?? new Set<number>();
-      ranks.add(rankNumber);
-      runsBySuit.set(suit, ranks);
-    }
+function canAddToMeld(card: Card, meld: readonly Card[]): boolean {
+  if (isValidSet(meld)) {
+    return meld.length < MAX_SET_SIZE
+      && card.order === meld[0]?.order
+      && !meld.some((meldCard) => suitOf(meldCard) === suitOf(card));
   }
-
-  const remaining: Card[] = [];
-  const candidates: Card[] = [];
-  for (const card of deadwoods) {
-    const [suit = "", rank = ""] = card.name.split("-");
-    const matchingSet = setsByRank.get(rank);
-    const canLayOffToSet = Boolean(matchingSet && matchingSet.size >= 3 && !matchingSet.has(suit));
-
-    const rankNumber = Number.parseInt(rank, 16);
-    const suitedRun = runsBySuit.get(suit);
-    let canLayOffToRun = false;
-    if (suitedRun && !Number.isNaN(rankNumber)) {
-      const sorted = [...suitedRun].sort((left, right) => left - right);
-      const minimum = sorted[0];
-      const maximum = sorted.at(-1);
-      canLayOffToRun = minimum !== undefined
-        && maximum !== undefined
-        && (rankNumber === minimum - 1 || rankNumber === maximum + 1);
-    }
-
-    (canLayOffToSet || canLayOffToRun ? candidates : remaining).push(card);
+  if (isValidRun(meld)) {
+    if (suitOf(card) !== suitOf(meld[0]!)) return false;
+    const orders = meld.map((meldCard) => meldCard.order);
+    return card.order === Math.min(...orders) - 1 || card.order === Math.max(...orders) + 1;
   }
+  return false;
+}
 
-  if (candidates.length > 0) {
-    const best = candidates.reduce((maximum, card) => card.point > maximum.point ? card : maximum);
-    for (const card of candidates) {
-      if (card !== best) remaining.push(card);
+export function calculateLayingOff(
+  inputDeadwoods: readonly Card[],
+  inputMeldGroups: readonly (readonly Card[])[],
+): LayoffSummary {
+  const original = inputDeadwoods.map((card) => ({ ...card }));
+  const meldGroups = inputMeldGroups.map((meld) => meld.map((card) => ({ ...card })));
+
+  const search = (deadwoods: Card[], melds: Card[][], laidOff: Card[]): LayoffSummary => {
+    let best: LayoffSummary = {
+      deadwoods,
+      laidOff,
+      deadwoodPoint: deadwoods.reduce((sum, card) => sum + card.point, 0),
+    };
+
+    for (let cardIndex = 0; cardIndex < deadwoods.length; cardIndex += 1) {
+      const card = deadwoods[cardIndex]!;
+      for (let meldIndex = 0; meldIndex < melds.length; meldIndex += 1) {
+        const meld = melds[meldIndex]!;
+        if (!canAddToMeld(card, meld)) continue;
+        const nextDeadwoods = deadwoods.filter((_, index) => index !== cardIndex);
+        const nextMelds = melds.map((group, index) => index === meldIndex ? [...group, card] : group);
+        const candidate = search(nextDeadwoods, nextMelds, [...laidOff, card]);
+        if (candidate.deadwoodPoint < best.deadwoodPoint
+          || (candidate.deadwoodPoint === best.deadwoodPoint && candidate.laidOff.length > best.laidOff.length)) {
+          best = candidate;
+        }
+      }
     }
-  }
-  return remaining.reduce((sum, card) => sum + card.point, 0);
+    return best;
+  };
+
+  return search(original, meldGroups, []);
+}
+
+export function canKnock(cards: readonly Card[]): boolean {
+  const summary = calculateHandSummary(cards);
+  return cards.length === CARDS_PER_HAND
+    ? summary.deadwoodPoint <= KNOCK_THRESHOLD
+    : cards.length === CARDS_PER_HAND + 1 && summary.deadwoodPoint === 0;
 }
 
 export function calculateRoundScore(
@@ -158,35 +199,37 @@ export function calculateRoundScore(
 ): RoundScoreResult {
   const mine = calculateHandSummary(knockerCards);
   const opponent = calculateHandSummary(opponentCards);
-  const isGin = mine.deadwoodPoint === 0;
-  const isBigGin = isGin && mine.cards.length === 13;
-  const adjustedOpponentDeadwood = isGin
+  const isBigGin = mine.cards.length === CARDS_PER_HAND + 1 && mine.deadwoodPoint === 0;
+  const isGin = mine.cards.length === CARDS_PER_HAND && mine.deadwoodPoint === 0;
+  const adjustedOpponentDeadwood = isGin || isBigGin
     ? opponent.deadwoodPoint
-    : calculateLayingOff(opponent.deadwoods, mine.melds);
+    : calculateLayingOff(opponent.deadwoods, mine.meldGroups).deadwoodPoint;
 
   let baseScore = 0;
   let bonus = 0;
   let result: RoundScoreResult["result"] = "Knock";
-  if (isGin) {
+  if (isGin || isBigGin) {
     baseScore = opponent.deadwoodPoint;
-    bonus = isBigGin ? 45 : 36;
+    bonus = isBigGin ? BIG_GIN_BONUS : GIN_BONUS;
     result = isBigGin ? "Big Gin" : "Gin";
   } else if (mine.deadwoodPoint < adjustedOpponentDeadwood) {
     baseScore = adjustedOpponentDeadwood - mine.deadwoodPoint;
   } else {
     baseScore = mine.deadwoodPoint - adjustedOpponentDeadwood;
-    bonus = 36;
+    bonus = UNDERCUT_BONUS;
     result = "Undercut";
   }
 
+  const winner = result === "Undercut" ? otherPlayer(knocker) : knocker;
+  const winnerIsPlayerOne = winner === "0";
   const round: ScoreRound = {
     round: (previousSummary?.rounds.length ?? 0) + 1,
-    p1Score: result === "Undercut" ? baseScore : 0,
-    p1Bonus: result === "Undercut" ? bonus : 0,
-    p1Total: result === "Undercut" ? baseScore + bonus : 0,
-    p2Score: result === "Undercut" ? 0 : baseScore,
-    p2Bonus: result === "Undercut" ? 0 : bonus,
-    p2Total: result === "Undercut" ? 0 : baseScore + bonus,
+    p1Score: winnerIsPlayerOne ? baseScore : 0,
+    p1Bonus: winnerIsPlayerOne ? bonus : 0,
+    p1Total: winnerIsPlayerOne ? baseScore + bonus : 0,
+    p2Score: winnerIsPlayerOne ? 0 : baseScore,
+    p2Bonus: winnerIsPlayerOne ? 0 : bonus,
+    p2Total: winnerIsPlayerOne ? 0 : baseScore + bonus,
     result,
   };
   const rounds = [...(previousSummary?.rounds ?? []), round];
@@ -198,16 +241,6 @@ export function calculateRoundScore(
   return {
     scoreSummary,
     result,
-    winner: result === "Undercut" ? otherPlayer(knocker) : knocker,
-  };
-}
-
-export function previousScoreSummary(summary: ScoreSummary): ScoreSummary | null {
-  const rounds = summary.rounds.slice(0, -1);
-  if (rounds.length === 0) return null;
-  return {
-    rounds,
-    p1TotalScore: rounds.reduce((sum, round) => sum + round.p1Total, 0),
-    p2TotalScore: rounds.reduce((sum, round) => sum + round.p2Total, 0),
+    winner,
   };
 }

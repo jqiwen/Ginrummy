@@ -83,6 +83,7 @@ interface ServerToClientEvents {
   "game:started": (event: { matchId: string; startedBy: PlayerId }) => void;
   "game:dealing-started": (state: DealState) => void;
   "game:opponent-action": (event: GameOperationEvent) => void;
+  "game:opponent-drew": (event: { matchId: string; playerId: PlayerId }) => void;
   "game:pass-status": (event: PassStatusEvent) => void;
   "game:knocked": (event: { matchId: string; round: number; playerId: PlayerId }) => void;
   "round:result": (event: RoundResultEvent) => void;

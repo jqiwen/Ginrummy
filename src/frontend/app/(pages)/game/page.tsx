@@ -73,25 +73,22 @@ function GameContent() {
     <div className="flex h-screen min-h-[640px] min-w-[1100px] flex-col overflow-hidden bg-[#06110d]">
       <HeaderBar />
 
-      <main className="flex min-h-0 flex-1 overflow-hidden p-2">
+      <main className="relative flex min-h-0 flex-1 overflow-hidden p-2">
         <aside
+          id="game-rules-panel"
           aria-hidden={!sidebarOpen}
-          className="h-full shrink-0 overflow-hidden rounded-sm bg-[#f1ead9] text-[#17231d] shadow-[0_18px_45px_rgba(0,0,0,0.32)] transition-[width,margin] duration-500 ease-in-out"
-          style={{
-            width: sidebarOpen ? "340px" : "0px",
-            marginRight: sidebarOpen ? "8px" : "0px",
-            visibility: sidebarOpen ? "visible" : "hidden",
-          }}
+          className={`absolute bottom-2 right-2 top-2 z-[1000] w-[390px] overflow-hidden rounded-md border border-[#b89a5d]/35 bg-[#f1ead9] text-[#17231d] shadow-[-18px_18px_55px_rgba(0,0,0,0.42)] transition duration-300 ease-out ${
+            sidebarOpen ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-[calc(100%+1rem)] opacity-0"
+          }`}
         >
-          {sidebarOpen && (
-            <div className="flex h-full w-[340px] flex-col">
+            <div className="flex h-full w-full flex-col">
               <div className="flex shrink-0 items-start justify-between border-b border-[#1a3a2b]/15 px-5 py-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-[#8a6f38]">
                     Table guide
                   </p>
                   <h2 className="mt-1 font-serif text-2xl font-semibold text-[#10251a]">
-                    Dozenal Gin Rummy Rules
+                    How to Play
                   </h2>
                 </div>
                 <Button
@@ -109,7 +106,6 @@ function GameContent() {
                 <DozenalGinRummyRules />
               </div>
             </div>
-          )}
         </aside>
 
         <section className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden rounded-sm border border-[#9b824e]/30 bg-[#020a07] shadow-[inset_0_0_60px_rgba(0,0,0,0.65)]">

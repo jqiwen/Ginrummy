@@ -6,6 +6,7 @@ import { createGameService, type GameService } from "../src/server.js";
 import { GameStore } from "../src/state/gameStore.js";
 import type { Card, DealState, GameOperation, RoundResult } from "../src/game/gameTypes.js";
 import { calculateRoundScore } from "../src/game/Scoring.js";
+import { DECK } from "../src/game/Card.js";
 
 interface Response<T = never> {
   success: boolean;
@@ -32,9 +33,11 @@ describe("Socket.IO game flow", () => {
   let service: GameService;
   let host: Socket;
   let guest: Socket;
+  let store: GameStore;
 
   beforeEach(async () => {
-    service = createGameService(new GameStore());
+    store = new GameStore();
+    service = createGameService(store);
     await new Promise<void>((resolve) => service.httpServer.listen(0, "127.0.0.1", resolve));
     const port = (service.httpServer.address() as AddressInfo).port;
     const url = `http://127.0.0.1:${port}`;
@@ -134,36 +137,58 @@ describe("Socket.IO game flow", () => {
     await emitAck(host, "game:pass", { matchId, playerId: "1", round: 2 });
     await expect(bothPassed).resolves.toMatchObject({ status: "both-passed" });
 
-    const knocked = once<{ playerId: string }>(host, "game:knocked");
-    await emitAck(guest, "game:knock", { matchId, playerId: "0", round: 2 });
-    await expect(knocked).resolves.toMatchObject({ playerId: "0" });
+    const earlyKnock = await emitAck(guest, "game:knock", { matchId, playerId: "0", round: 2 });
+    expect(earlyKnock.success).toBe(false);
 
+    const opponentDrew = once<{ playerId: string }>(host, "game:opponent-drew");
+    await emitAck(guest, "game:draw-stack", { matchId, playerId: "0", round: 2 });
+    await expect(opponentDrew).resolves.toMatchObject({ playerId: "0" });
+    const turnDiscard = await emitAck(guest, "game:discard", {
+      matchId,
+      playerId: "0",
+      round: 2,
+      cardName: guestRoundTwo.ownCards[0]!.name,
+    });
+    expect(turnDiscard.success).toBe(true);
+
+    const ginNames = [
+      "spades-01", "spades-02", "spades-03",
+      "hearts-04", "hearts-05", "hearts-06",
+      "clubs-07", "clubs-08", "clubs-09",
+      "diamonds-J", "diamonds-C", "diamonds-Q",
+    ];
+    store.getRoom(matchId).match.guestCards = ginNames.map((name) => ({
+      ...DECK.find((card) => card.name === name)!,
+    }));
+
+    const knocked = once<{ playerId: string }>(host, "game:knocked");
+    const resultEvent = once<RoundResult>(host, "round:result");
+    const knock = await emitAck(guest, "game:knock", { matchId, playerId: "0", round: 2 });
+    expect(knock.success).toBe(true);
+    await expect(knocked).resolves.toMatchObject({ playerId: "0" });
+    const serverResult = await resultEvent;
+
+    const room = store.getRoom(matchId);
     const authoritativeScore = calculateRoundScore(
       "0",
-      guestRoundTwo.ownCards,
-      guestRoundTwo.opponentCards,
+      room.match.getHand("0"),
+      room.match.getHand("1"),
       null,
     );
-    const rejectedScore = await emitAck(guest, "round:submit-result", {
+    expect(serverResult).toMatchObject({
+      winner: authoritativeScore.winner,
+      submittedBy: "0",
+      scoreSummary: authoritativeScore.scoreSummary,
+    });
+
+    const legacySubmit = await emitAck(guest, "round:submit-result", {
       matchId,
       playerId: "0",
       round: 2,
       winner: "0",
       scoreSummary: { rounds: [], p1TotalScore: 0, p2TotalScore: 0 },
     });
-    expect(rejectedScore.success).toBe(false);
-    const resultEvent = once<RoundResult>(host, "round:result");
-    await emitAck(guest, "round:submit-result", {
-      matchId,
-      playerId: "0",
-      round: 2,
-      winner: authoritativeScore.winner,
-      scoreSummary: authoritativeScore.scoreSummary,
-    });
-    await expect(resultEvent).resolves.toMatchObject({
-      winner: authoritativeScore.winner,
-      submittedBy: "0",
-    });
+    expect(legacySubmit.success).toBe(true);
 
     const bothReady = once<{ round: number }>(host, "round:both-ready");
     await emitAck(host, "round:ready-next", { matchId, playerId: "1", round: 2 });

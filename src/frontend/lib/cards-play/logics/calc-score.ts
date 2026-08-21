@@ -1,5 +1,5 @@
 import { Card, PlayerSummary } from '../../models/card-animation.model';
-import { decimalToDozenal } from './count-dozenal';
+import { MAX_SET_SIZE, MIN_MELD_SIZE } from '../../game/rules';
 
 type CalcScoreCard = {
   order: number,
@@ -55,8 +55,9 @@ const calculateGinRummyScore = (CalcScoreCards: CalcScoreCard[]): PlayerSummary 
     const sets: CalcScoreCard[][] = [];
     for (const rank in ranks) {
       const group = ranks[rank];
-      if (group.length >= 3) {
-        for (let size = 3; size <= group.length; size++) {
+      const uniqueGroup = Array.from(new Map(group.map((card) => [card.name.split('-')[0], card])).values());
+      if (uniqueGroup.length >= MIN_MELD_SIZE) {
+        for (let size = MIN_MELD_SIZE; size <= Math.min(MAX_SET_SIZE, uniqueGroup.length); size++) {
           const combinations = (arr: CalcScoreCard[], size: number): CalcScoreCard[][] => {
             if (size > arr.length) return [];
             if (size === arr.length) return [arr];
@@ -68,7 +69,13 @@ const calculateGinRummyScore = (CalcScoreCards: CalcScoreCard[]): PlayerSummary 
             });
             return result;
           };
-          combinations(group, size).forEach((c) => sets.push(c));
+          combinations(uniqueGroup, size).forEach((combination) => {
+            const names = new Set(combination.map((card) => card.name));
+            const suits = new Set(combination.map((card) => card.name.split('-')[0]));
+            if (names.size === combination.length && suits.size === combination.length) {
+              sets.push(combination);
+            }
+          });
         }
       }
     }
@@ -85,7 +92,8 @@ const calculateGinRummyScore = (CalcScoreCards: CalcScoreCard[]): PlayerSummary 
       return;
     }
     const group = index < allRuns.length ? allRuns[index] : allSets[index - allRuns.length];
-    const groupUsed = group.some((card) => used.has(card.name));
+    const groupUsed = new Set(group.map((card) => card.name)).size !== group.length
+      || group.some((card) => used.has(card.name));
     explore(melds, used, index + 1);
     if (!groupUsed) {
       const newUsed = new Set(used);
@@ -127,7 +135,6 @@ const calculateGinRummyScore = (CalcScoreCards: CalcScoreCard[]): PlayerSummary 
     MeldsPoint: bestCombo.melds.flat().reduce((s, c) => s + c.point, 0),
     Deadwoods: deadwoods,
     DeadwoodsPoint: bestCombo.deadwood,
-    DeadwoodsDozenalPoint: decimalToDozenal(bestCombo.deadwood),
     Runs: bestCombo.runs.flat(),
     Sets: bestCombo.sets.flat()
   };

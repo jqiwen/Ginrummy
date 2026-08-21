@@ -120,7 +120,16 @@ export function HeaderBar() {
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild> 
-                            <Button className={surfaceButtonClass} size="icon" variant={game.showSideBar === 'Rules' ? "secondary" : "ghost"} onClick={() => {changeShowSideBar('Rules')}}><InfoCircledIcon  className="h-4 w-4" /></Button>
+                            <Button
+                              className={`${surfaceButtonClass} gap-2 px-3`}
+                              variant={game.showSideBar === 'Rules' ? "secondary" : "ghost"}
+                              onClick={() => {changeShowSideBar('Rules')}}
+                              aria-expanded={game.showSideBar === 'Rules'}
+                              aria-controls="game-rules-panel"
+                            >
+                              <InfoCircledIcon className="h-4 w-4" />
+                              <span>? Rules</span>
+                            </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" align="center" className="bg-black text-white px-3 py-2 rounded-md shadow-lg flex" style={{ zIndex: 1000 }}>
                             <p>Rules</p>

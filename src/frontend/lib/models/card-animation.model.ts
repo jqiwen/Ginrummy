@@ -56,7 +56,6 @@ export interface PlayerSummary{
     MeldsPoint?: number
     Deadwoods?: Card[]
     DeadwoodsPoint?: number
-    DeadwoodsDozenalPoint?: string
     Sets?:Card[]
     Runs?:Card[]
   }

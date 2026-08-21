@@ -5,6 +5,7 @@ import type {
   PlayerId,
   RoundPhase,
   RoundResult,
+  ScoreSummary,
 } from "../game/gameTypes.js";
 
 export interface PlayerConnection {
@@ -30,6 +31,7 @@ export interface RoomState {
   initialPlayer: PlayerId;
   passed: Set<PlayerId>;
   pendingDraw?: PendingDraw;
+  scoreSummary: ScoreSummary | null;
   roundResults: Map<number, RoundResult>;
   readyNextRound: Map<number, Set<PlayerId>>;
 }
@@ -72,6 +74,7 @@ export class GameStore {
       turn: "1",
       initialPlayer: "1",
       passed: new Set<PlayerId>(),
+      scoreSummary: null,
       roundResults: new Map<number, RoundResult>(),
       readyNextRound: new Map<number, Set<PlayerId>>(),
     };

@@ -1,6 +1,7 @@
 import { Bot } from "./Bot.js";
 import { cloneCard, DECK } from "./Card.js";
 import type { Card, DrawSource, GameOperation, PlayerId } from "./gameTypes.js";
+import { CARDS_PER_HAND } from "./RuleConstants.js";
 
 export interface BotTurn extends GameOperation {}
 
@@ -48,7 +49,7 @@ export class Match {
     this.dropZone.push(firstDrop);
     this.initialCards.push(firstDrop);
 
-    for (let index = 0; index < 12; index += 1) {
+    for (let index = 0; index < CARDS_PER_HAND; index += 1) {
       const hostCard = this.deck.pop();
       const guestCard = this.deck.pop();
       if (!hostCard || !guestCard) {

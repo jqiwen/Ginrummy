@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { formatDozenal } from "../game/rules";
 
 interface ScoreRound {
   round: number;
@@ -22,26 +23,16 @@ interface ScoreSummary {
 
 interface GameOverOverlayProps {
   isWin: boolean;
-  p1TotalScore: number;
-  p2TotalScore: number;
   onReturn?: () => void;
   scoreSummary: ScoreSummary;
-  host: string;
-  whosTurn: string;
   roomId: string;
-  decimalToDozenal: (num: number) => string;
 }
 
 export default function GameOverOverlay({
   isWin,
-  p1TotalScore,
-  p2TotalScore,
   onReturn,
   scoreSummary,
-  host,
-  whosTurn,
   roomId,
-  decimalToDozenal,
 }: GameOverOverlayProps) {
   return (
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-80 flex flex-col items-center justify-center text-white text-center px-4 pointer-events-auto overflow-y-auto">
@@ -76,12 +67,12 @@ export default function GameOverOverlay({
             {scoreSummary?.rounds.map((round, index) => (
               <tr key={index} className="hover:bg-gray-100 transition">
                 <td className="px-3 py-2">{round.round}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p1Score || 0)}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p1Bonus || 0)}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p1Total || 0)}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p2Score || 0)}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p2Bonus || 0)}</td>
-                <td className="px-3 py-2">{decimalToDozenal(round.p2Total || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p1Score || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p1Bonus || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p1Total || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p2Score || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p2Bonus || 0)}</td>
+                <td className="px-3 py-2">{formatDozenal(round.p2Total || 0)}</td>
                 <td className="px-3 py-2">{round.result}</td>
               </tr>
             ))}
@@ -89,10 +80,10 @@ export default function GameOverOverlay({
               <td className="px-3 py-2">Total Score</td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2"></td>
-              <td className="px-3 py-2">{decimalToDozenal(scoreSummary?.p1TotalScore || 0)}</td>
+              <td className="px-3 py-2">{formatDozenal(scoreSummary?.p1TotalScore || 0)}</td>
               <td className="px-3 py-2"></td>
               <td className="px-3 py-2"></td>
-              <td className="px-3 py-2">{decimalToDozenal(scoreSummary?.p2TotalScore || 0)}</td>
+              <td className="px-3 py-2">{formatDozenal(scoreSummary?.p2TotalScore || 0)}</td>
               <td className="px-3 py-2"></td>
             </tr>
           </tbody>

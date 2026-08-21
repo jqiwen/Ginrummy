@@ -1,48 +1,32 @@
 import calculateGinRummyScore from '../cards-play/logics/calc-score';
 import { CARDS } from '../data/cards.data';
 
-const getCard = (name: string) => {
-  const card = CARDS.find(c => c.name === name);
-  if (!card) throw new Error(`Card not found: ${name}`);
-  return card;
-};
+function cards(names: string[]) {
+  return names.map((name) => {
+    const card = CARDS.find((candidate) => candidate.name === name);
+    if (!card) throw new Error(`Card not found: ${name}`);
+    return card;
+  });
+}
 
-test('should not recognize invalid run when a card is missing', () => {
-  // 少了 hearts-0B
-  const cards = [
-    // 'hearts-08',
-    // 'hearts-09',
-    // 'hearts-0A',
-    // 'hearts-10',
-    // 'hearts-J'
+describe('client meld feedback', () => {
+  it('recognizes the custom ↊, ↋, 10 rank sequence', () => {
+    const result = calculateGinRummyScore(cards([
+      'spades-09', 'spades-0A', 'spades-0B', 'spades-10',
+    ]));
+    expect(result.DeadwoodsPoint).toBe(0);
+    expect(result.Runs?.map((card) => card.name)).toEqual([
+      'spades-09', 'spades-0A', 'spades-0B', 'spades-10',
+    ]);
+  });
 
-    // 'spades-03','spades-04', 'spades-05', 'spades-06', 
-    // 'diamonds-J', 'clubs-J','spades-J',
-    // 'hearts-C', 'clubs-C','spades-C',
-    // 'hearts-Q', 'clubs-Q','spades-Q',
-
-    'diamonds-03','spades-03', 
-    'hearts-04', 'hearts-05', 
-    'diamonds-08', 'hearts-08',
-    'hearts-C','hearts-0B','hearts-J',
-    'hearts-K','spades-K','clubs-K'
-  ].map(getCard);
-
-  const result = calculateGinRummyScore(cards);
-
-  const runNames = result.Runs.map(c => c.name);
-
-  // // 不应包含 hearts-0↋（因为根本没有）
-  // expect(runNames).not.toContain('hearts-0↋');
-
-  // // 应该识别到最合理的 run（例如 08 09 0↊）
-  // expect(runNames).toEqual(expect.arrayContaining([
-  //   'hearts-08', 'hearts-09', 'hearts-0A'
-  // ]));
-
-  console.log(result.DeadwoodsPoint);
-  console.log(result.DeadwoodsDozenalPoint);
-  
-  expect(result.DeadwoodsPoint).toBe(66);
-
+  it('chooses the overlapping meld combination with minimum Deadwood', () => {
+    const result = calculateGinRummyScore(cards([
+      'hearts-03', 'hearts-04', 'hearts-05', 'clubs-05', 'diamonds-05',
+    ]));
+    expect(result.DeadwoodsPoint).toBe(7);
+    expect(result.Sets?.map((card) => card.name)).toEqual(expect.arrayContaining([
+      'hearts-05', 'clubs-05', 'diamonds-05',
+    ]));
+  });
 });
