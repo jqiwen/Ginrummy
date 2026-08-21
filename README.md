@@ -125,41 +125,6 @@ This guarantees that both players in the same game access the same game state.
 
 ---
 
-# Future Improvements
-
-The next architecture step is moving shared game state outside the application instance.
-
-### Redis-backed Multiplayer State
-
-```text
-                 ┌── Cloud Run Instance 1
-Players ────────►│
-                 ├────────► Redis
-Players ────────►│
-                 └── Cloud Run Instance 2
-```
-
-Moving room and match state to **Redis** would allow multiple Cloud Run instances to share the same source of truth.
-
-This would enable:
-
-* Horizontal scaling
-* Multiple backend instances
-* Higher concurrent player capacity
-* More reliable session recovery
-* Cross-instance event coordination
-
-Other planned improvements include:
-
-* Persistent player accounts
-* Match history
-* Player statistics
-* Ranking system
-* Improved matchmaking
-* Automated backend deployment
-* Expanded integration testing
-
----
 
 # Engineering Highlights
 
