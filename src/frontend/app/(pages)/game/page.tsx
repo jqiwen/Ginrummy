@@ -1,140 +1,170 @@
-
-
 "use client";
 
-import { HeaderBar } from "@/lib/my-components/header-bar";
-import DealCards from "@/lib/cards-play/deal-card-animation";
-
-import { useSelector, useDispatch } from "react-redux";
-import { AppDispatch, RootState } from "@shared-store/index";
-import { Suspense, useEffect, useState } from "react";
-import { setGameStatus } from "@/lib/shared-store/slices/game";
+import { Cross1Icon } from "@radix-ui/react-icons";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 
 import { Button } from "@/components/ui/button";
-import { Cross1Icon } from "@radix-ui/react-icons";
-
-import { useSearchParams } from "next/navigation";
+import DealCards from "@/lib/cards-play/deal-card-animation";
+import { HeaderBar } from "@/lib/my-components/header-bar";
+import DozenalGinRummyRules from "@/lib/my-components/rule";
 import { publicAssetPath } from "@/lib/publicAsset";
+import { setGameStatus } from "@/lib/shared-store/slices/game";
+import { AppDispatch, RootState } from "@shared-store/index";
 
-import DozenalGinRummyRules from "@/lib/my-components/rule"
+const BOARD_IMAGE_WIDTH = 3508;
+const BOARD_IMAGE_HEIGHT = 2480;
+const BOARD_ASPECT_RATIO = BOARD_IMAGE_WIDTH / BOARD_IMAGE_HEIGHT;
 
-// host -> 1
-// join -> 0
+// DealCards uses pixel-based positions. Keeping one canonical coordinate space
+// lets the background and every game element scale together without distortion.
+const GAME_UI_WIDTH = 1300;
+const GAME_UI_HEIGHT = GAME_UI_WIDTH / BOARD_ASPECT_RATIO;
 
 function GameContent() {
-    const searchParams = useSearchParams();
-    const fullRoomId = searchParams.get("roomId") ?? "tutorial";
-    const roomId = fullRoomId.split("-")[0];
-    const host = fullRoomId.split("-")[1] ?? '1';
+  const searchParams = useSearchParams();
+  const fullRoomId = searchParams.get("roomId") ?? "tutorial";
+  const roomId = fullRoomId.split("-")[0];
+  const host = fullRoomId.split("-")[1] ?? "1";
 
-    // console.log(roomId);
-    
+  const dispatch = useDispatch<AppDispatch>();
+  const game = useSelector((state: RootState) => state.game);
+  const user = useSelector((state: RootState) => state.user);
 
-    const dispatch = useDispatch<AppDispatch>();
-    const game = useSelector((state: RootState) => state.game);
+  const [userName, setUserName] = useState("");
+  const [boardScale, setBoardScale] = useState(1);
+  const boardRef = useRef<HTMLDivElement>(null);
+  const sidebarOpen = Boolean(game.showSideBar);
 
-    const [animateClose, setAnimateClose] = useState(true);
-    const [showRefreshWarning, setShowRefreshWarning] = useState(true);
+  useEffect(() => {
+    setUserName(user.username === "" ? "User" : user.username);
+  }, [user.username]);
 
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
 
-    const [userName, setUserName] = useState<string>('')
-
-    // const dispatch = useDispatch<AppDispatch>();
-    const user = useSelector((state: RootState) => state.user);
-    useEffect(() => {
-        console.log("Updated user info: ", user);
-        console.log("ooooooooooooooooooooooooooooooooooooooooo:",user);
-        if (user.username == '') {
-            setUserName('User')
-        } else{
-            setUserName(user.username)
+    let animationFrame = 0;
+    const updateScale = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        if (board.clientWidth > 0) {
+          setBoardScale(board.clientWidth / GAME_UI_WIDTH);
         }
-        
-    }, [user]);
-
-
-    useEffect(() => {
-        console.log("Updated game Status: ", game);
-        if (game.showSideBar) {
-            setAnimateClose(false);
-        }
-    }, [game]);
-
-    const handleClose = () => {
-        setAnimateClose(true);
-        dispatch(setGameStatus({ showSideBar: null }));
+      });
     };
 
-    return (
-        <div className="h-full w-full flex flex-col relative">
-            <HeaderBar />
+    updateScale();
+    const resizeObserver = new ResizeObserver(updateScale);
+    resizeObserver.observe(board);
 
-            <div className="flex w-full h-[600px] pt-2 py-4 px-4 transition-all duration-500 ease-in-out" >
-                {/* Left Drawer */}
-                <div
-                    className={`bg-gray-100 h-full  transition-all duration-500 ease-in-out flex ${
-                        animateClose ? "" : "mr-4"
-                    }`}
-                    
-                    style={{
-                        width: game.showSideBar ? "350px" : "0px",
-                        visibility: game.showSideBar || !animateClose ? 'visible' : 'hidden',
-                    }}
-                >
-                    {game.showSideBar && (
-                        <div>
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+    };
+  }, []);
 
+  const handleClose = () => {
+    dispatch(setGameStatus({ showSideBar: null }));
+  };
 
-                        <div className={`p-4 relative w-full  ${
-                            animateClose ? "" : "pl-4"
-                        }`}>  
-                            <Button size="icon" variant="ghost"  onClick={handleClose} className="absolute top-2 right-2" >
-                                <Cross1Icon  className="h-4 w-4" />
-                            </Button>
+  return (
+    <div className="flex h-screen min-h-[640px] min-w-[1100px] flex-col overflow-hidden bg-[#06110d]">
+      <HeaderBar />
 
-                        </div>
-
-                        <h2 className="text-3xl font-bold px-4">Dozenal Gin Rummy Rules</h2>
-                        <div className="flex-1 overflow-y-auto " style={{ height: "calc(100vh - 200px)" }}>
-                            
-                            <DozenalGinRummyRules />
-                        </div>
-                        </div>
-                    )}
-
-                  
+      <main className="flex min-h-0 flex-1 overflow-hidden p-2">
+        <aside
+          aria-hidden={!sidebarOpen}
+          className="h-full shrink-0 overflow-hidden rounded-sm bg-[#f1ead9] text-[#17231d] shadow-[0_18px_45px_rgba(0,0,0,0.32)] transition-[width,margin] duration-500 ease-in-out"
+          style={{
+            width: sidebarOpen ? "340px" : "0px",
+            marginRight: sidebarOpen ? "8px" : "0px",
+            visibility: sidebarOpen ? "visible" : "hidden",
+          }}
+        >
+          {sidebarOpen && (
+            <div className="flex h-full w-[340px] flex-col">
+              <div className="flex shrink-0 items-start justify-between border-b border-[#1a3a2b]/15 px-5 py-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.26em] text-[#8a6f38]">
+                    Table guide
+                  </p>
+                  <h2 className="mt-1 font-serif text-2xl font-semibold text-[#10251a]">
+                    Dozenal Gin Rummy Rules
+                  </h2>
                 </div>
-
-
-                {/* Right Play Table*/}
-                <div
-                    className="h-full flex flex-col items-center justify-center transition-all duration-500 ease-in-out relative"
-                    style={{ flex: game.showSideBar ? 1 : 2 }}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={handleClose}
+                  aria-label="Close rules"
+                  className="-mr-2 -mt-2 shrink-0 text-[#294235] hover:bg-[#163426]/10"
                 >
-                    {/* 背景层 */}
-                    <div
-                        className="absolute inset-0 z-0"
-                        style={{
-                            backgroundImage: `url("${publicAssetPath("/main-image/background-nothing.jpg")}")`, // 替换成你的图片路径
-                            backgroundSize: '100% 100%', // 完全填充，可变形
-                            backgroundRepeat: 'no-repeat',
-                            backgroundPosition: 'center',
-                            opacity: 0.3, // 仅背景图透明
-                        }}
-                    ></div>
+                  <Cross1Icon className="h-4 w-4" />
+                </Button>
+              </div>
 
-                                    <DealCards roomId={roomId} host={host} userName={userName}/>
-                                </div>
-                            </div>
-                        </div>
-                    );
+              <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-5">
+                <DozenalGinRummyRules />
+              </div>
+            </div>
+          )}
+        </aside>
 
-                }
+        <section className="relative flex min-w-0 flex-1 items-center justify-center overflow-hidden rounded-sm border border-[#9b824e]/30 bg-[#020a07] shadow-[inset_0_0_60px_rgba(0,0,0,0.65)]">
+          <div
+            ref={boardRef}
+            className="relative max-w-full overflow-hidden border border-[#c0a361]/35 bg-[#07150f] shadow-[0_26px_70px_rgba(0,0,0,0.5)]"
+            style={{
+              aspectRatio: `${BOARD_IMAGE_WIDTH} / ${BOARD_IMAGE_HEIGHT}`,
+              width: `min(100%, calc((100vh - 4.5rem) * ${BOARD_ASPECT_RATIO}))`,
+              maxWidth: "1600px",
+            }}
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-0 bg-center bg-no-repeat"
+              style={{
+                backgroundImage: `url("${publicAssetPath("/main-image/background-nothing.jpg")}")`,
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+                backgroundSize: "cover",
+              }}
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 z-10 bg-[#00130d]/20 shadow-[inset_0_0_80px_rgba(0,0,0,0.28)]"
+            />
+
+            <div
+              className="absolute left-1/2 top-1/2 z-20"
+              style={{
+                width: `${GAME_UI_WIDTH}px`,
+                height: `${GAME_UI_HEIGHT}px`,
+                transform: `translate(-50%, -50%) scale(${boardScale})`,
+                transformOrigin: "center",
+              }}
+            >
+              <DealCards roomId={roomId} host={host} userName={userName} />
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
 
 export default function GamePage() {
-    return (
-        <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading game...</div>}>
-            <GameContent />
-        </Suspense>
-    );
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#06110d] font-serif text-lg text-[#f5edd9]">
+          Preparing the table…
+        </div>
+      }
+    >
+      <GameContent />
+    </Suspense>
+  );
 }

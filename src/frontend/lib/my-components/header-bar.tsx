@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
   
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ExitIcon, InfoCircledIcon, ArchiveIcon } from "@radix-ui/react-icons"
+import { ExitIcon, InfoCircledIcon } from "@radix-ui/react-icons"
 
 import {
     HoverCard,
@@ -39,9 +39,16 @@ export function HeaderBar() {
 
     const rawPathname = usePathname();
     const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-    const pathname = basePath && rawPathname.startsWith(basePath)
+    const pathnameWithoutBase = basePath && rawPathname.startsWith(basePath)
       ? rawPathname.slice(basePath.length) || "/"
       : rawPathname;
+    const pathname = pathnameWithoutBase.length > 1
+      ? pathnameWithoutBase.replace(/\/+$/, "")
+      : pathnameWithoutBase;
+    const isCardSurface = pathname === "/" || pathname === "/home" || pathname === "/game";
+    const surfaceButtonClass = isCardSurface
+      ? "text-[#eee4cb] hover:bg-[#d0b36d]/15 hover:text-[#fff6dc]"
+      : "";
 
     const [openPauseDialog, setOpenPauseDialog] = useState(false);
 
@@ -73,13 +80,19 @@ export function HeaderBar() {
     
 
     return (
-        <header className="sticky top-0 z-990 w-full flex items-center justify-between px-4 py-2 flex-row ">
+        <header
+          className={`sticky top-0 z-[990] flex h-14 w-full shrink-0 flex-row items-center justify-between border-b px-5 ${
+            isCardSurface
+              ? "border-[#9c8248]/25 bg-[#07140f] text-[#f5edd9] shadow-[0_8px_28px_rgba(0,0,0,0.18)]"
+              : "border-slate-200 bg-white text-slate-900"
+          }`}
+        >
             {pathname === "/game" && (
                 <div className='flex flex-row gap-2'>
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild> 
-                            <Button size="icon" variant="ghost" onClick={() => {setOpenPauseDialog(true)}}><ExitIcon className="h-4 w-4" /></Button>
+                            <Button className={surfaceButtonClass} size="icon" variant="ghost" onClick={() => {setOpenPauseDialog(true)}}><ExitIcon className="h-4 w-4" /></Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" align="center" className="bg-black text-white px-3 py-2 rounded-md shadow-lg" style={{zIndex: 1000 }}>
                             <p>Leave</p>
@@ -107,7 +120,7 @@ export function HeaderBar() {
                 <TooltipProvider>
                     <Tooltip delayDuration={0}>
                         <TooltipTrigger asChild> 
-                            <Button size="icon" variant={game.showSideBar === 'Rules' ? "secondary" : "ghost"} onClick={() => {changeShowSideBar('Rules')}}><InfoCircledIcon  className="h-4 w-4" /></Button>
+                            <Button className={surfaceButtonClass} size="icon" variant={game.showSideBar === 'Rules' ? "secondary" : "ghost"} onClick={() => {changeShowSideBar('Rules')}}><InfoCircledIcon  className="h-4 w-4" /></Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" align="center" className="bg-black text-white px-3 py-2 rounded-md shadow-lg flex" style={{ zIndex: 1000 }}>
                             <p>Rules</p>
@@ -133,7 +146,11 @@ export function HeaderBar() {
             ) }
 
             {(pathname === "/" || pathname === "/home") && (
-                <div>HOME</div>
+                <Link href="/home" className="flex items-center gap-3" aria-label="Gin Rummy Dozenal home">
+                  <span className="text-sm text-[#d1b46c]" aria-hidden="true">◆</span>
+                  <span className="font-serif text-sm font-semibold tracking-[0.16em] text-[#fff4d6]">GIN RUMMY</span>
+                  <span className="border-l border-[#9c8248]/45 pl-3 text-[9px] font-semibold uppercase tracking-[0.26em] text-[#cfc4aa]/55">Dozenal</span>
+                </Link>
             )}
 
             {pathname == "/pvp" && (
@@ -152,7 +169,7 @@ export function HeaderBar() {
             {user.username ? (
                     <HoverCard openDelay={0} closeDelay={100}>
                         <HoverCardTrigger asChild>
-                            <Button variant="ghost">{user.username}</Button>
+                            <Button className={surfaceButtonClass} variant="ghost">{user.username}</Button>
                         </HoverCardTrigger>
                         <HoverCardContent side="bottom" align="end" className=" w-auto h-auto flex flex-col gap-2 shadow-lg border-none">
                                 {/* <Button variant="ghost">My Profile</Button>
@@ -162,7 +179,7 @@ export function HeaderBar() {
                     </HoverCard>
 
                 ) : (
-                    <Button variant="ghost"><Link href="/login">Log in</Link></Button>
+                    <Button className={surfaceButtonClass} variant="ghost"><Link href="/login">Log in</Link></Button>
                 )
             }
         </header>

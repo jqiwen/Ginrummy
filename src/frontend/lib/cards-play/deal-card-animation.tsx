@@ -731,9 +731,9 @@ useEffect(() => {
                 ))}
 
                 {dealing && whosTurn === host && currentPass && roomId === 'tutorial' && (
-                  <div className="absolute left-full ml-4 mt-12 text-sm text-red-500">
-                    <div className="whitespace-nowrap font-semibold"> Tutorial only</div>
-                    <div className="whitespace-nowrap">In a real game, the non-dealer is the first to decide to pass or pick the first card.</div>
+                  <div className="absolute left-[calc(100%+120px)] top-1/2 ml-4 w-[400px] -translate-y-1/2 text-left text-sm leading-5 text-red-500">
+                    <div className="font-semibold">Tutorial only</div>
+                    <div>In a real game, the non-dealer is the first to decide to pass or pick the first card.</div>
                   </div>
                 )}
 
