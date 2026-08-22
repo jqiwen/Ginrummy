@@ -4,7 +4,7 @@ A real-time multiplayer Gin Rummy web game built with **Next.js, TypeScript, Soc
 
 Unlike standard Gin Rummy, this version uses a **base-12 (dozenal) card system** with a 64-card deck, introducing a different scoring model and game strategy while keeping the core draw, discard, knock, and round mechanics of Gin Rummy.
 
-🌐 **Live Site:** [Play Gin Rummy](https://ginrummy.jqiwen.com)
+### 🌐 [Play Gin Rummy →](https://ginrummy.jqiwen.com)
 
 ---
 
