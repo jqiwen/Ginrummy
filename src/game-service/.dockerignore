@@ -10,3 +10,4 @@ coverage
 Dockerfile*
 README.md
 tests
+gha-creds-*.json

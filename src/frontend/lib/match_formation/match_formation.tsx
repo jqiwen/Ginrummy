@@ -1,12 +1,16 @@
-import { connectGameSocket } from "@/lib/socket";
+import { waitForGameSocket } from "@/lib/socket";
 
 export async function createRoom(): Promise<string | null> {
-  const socket = connectGameSocket();
-  return new Promise((resolve) => {
-    socket.emit("room:create", { bot: false }, (response) => {
-      resolve(response.success ? response.data?.matchId ?? null : null);
+  try {
+    const socket = await waitForGameSocket();
+    return new Promise((resolve) => {
+      socket.emit("room:create", { bot: false }, (response) => {
+        resolve(response.success ? response.data?.matchId ?? null : null);
+      });
     });
-  });
+  } catch {
+    return null;
+  }
 }
 
 export interface JoinRoomResponse {
@@ -15,21 +19,29 @@ export interface JoinRoomResponse {
 }
 
 export async function joinRoom(matchID: string): Promise<JoinRoomResponse> {
-  const socket = connectGameSocket();
-  return new Promise((resolve) => {
-    socket.emit("room:join", { matchId: matchID }, (response) => {
-      resolve({ result: response.code, message: response.message });
+  try {
+    const socket = await waitForGameSocket();
+    return new Promise((resolve) => {
+      socket.emit("room:join", { matchId: matchID }, (response) => {
+        resolve({ result: response.code, message: response.message });
+      });
     });
-  });
+  } catch {
+    return { result: 1, message: "Game service is unavailable. Please try again." };
+  }
 }
 
 
     // 设置游戏为已开始
 export async function setGameStart(matchId: string) {
-  const socket = connectGameSocket();
-  return new Promise<{ result: number; message: string }>((resolve) => {
-    socket.emit("game:start", { matchId, playerId: "1" }, (response) => {
-      resolve({ result: response.code, message: response.message });
+  try {
+    const socket = await waitForGameSocket();
+    return new Promise<{ result: number; message: string }>((resolve) => {
+      socket.emit("game:start", { matchId, playerId: "1" }, (response) => {
+        resolve({ result: response.code, message: response.message });
+      });
     });
-  });
+  } catch {
+    return { result: 1, message: "Game service is unavailable. Please try again." };
+  }
 }

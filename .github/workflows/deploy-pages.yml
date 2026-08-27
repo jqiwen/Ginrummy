@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -35,14 +35,42 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Verify game service URL
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Resolve active game service URL
+        id: game-service
+        shell: bash
         env:
-          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+          GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
         run: |
-          if [ -z "$NEXT_PUBLIC_GAME_WS_URL" ]; then
-            echo "Create the CLOUD_RUN_GAME_SERVICE_URL repository variable before deploying Pages."
+          for name in GCP_PROJECT_ID GCP_REGION GCP_CLOUD_RUN_SERVICE; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required repository variable: $name"
+              exit 1
+            fi
+          done
+
+          GAME_SERVICE_URL=$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.url)')
+          if [[ "$GAME_SERVICE_URL" != https://* ]]; then
+            echo "Cloud Run returned an invalid game service URL."
             exit 1
           fi
+          echo "url=$GAME_SERVICE_URL" >> "$GITHUB_OUTPUT"
 
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -51,7 +79,7 @@ jobs:
       - name: Build static frontend
         working-directory: src/frontend
         env:
-          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_GAME_WS_URL: ${{ steps.game-service.outputs.url }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact

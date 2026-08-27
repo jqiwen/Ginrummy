@@ -1,8 +1,8 @@
 import type { AddressInfo } from "node:net";
 import { get } from "node:http";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { io as createClient, type Socket } from "socket.io-client";
-import { createGameService, type GameService } from "../src/server.js";
+import { createGameService, parseAllowedOrigins, type GameService } from "../src/server.js";
 import { GameStore } from "../src/state/gameStore.js";
 import type { Card, DealState, GameOperation, RoundResult } from "../src/game/gameTypes.js";
 import { calculateRoundScore } from "../src/game/Scoring.js";
@@ -28,6 +28,20 @@ function once<T>(socket: Socket, event: string): Promise<T> {
 function emitAck<T>(socket: Socket, event: string, payload: object): Promise<Response<T>> {
   return new Promise((resolve) => socket.emit(event, payload, resolve));
 }
+
+describe("Socket.IO origin configuration", () => {
+  it("includes production and local defaults while normalizing configured origins", () => {
+    expect(
+      parseAllowedOrigins(
+        " https://preview.example.com,https://ginrummy.jqiwen.com,,https://preview.example.com ",
+      ),
+    ).toEqual([
+      "http://localhost:3000",
+      "https://ginrummy.jqiwen.com",
+      "https://preview.example.com",
+    ]);
+  });
+});
 
 describe("Socket.IO game flow", () => {
   let service: GameService;
@@ -70,6 +84,49 @@ describe("Socket.IO game flow", () => {
 
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body)).toEqual({ status: "ok" });
+  });
+
+  it("accepts the production Origin and logs rejected WebSocket handshakes", async () => {
+    const port = (service.httpServer.address() as AddressInfo).port;
+    const url = `http://127.0.0.1:${port}`;
+    const productionClient = createClient(url, {
+      transports: ["websocket"],
+      forceNew: true,
+      extraHeaders: { Origin: "https://ginrummy.jqiwen.com" },
+    });
+
+    await once(productionClient, "connect");
+    expect(productionClient.io.engine.transport.name).toBe("websocket");
+    productionClient.disconnect();
+
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const rejectedClient = createClient(url, {
+      transports: ["websocket"],
+      forceNew: true,
+      reconnection: false,
+      timeout: 2_000,
+      extraHeaders: { Origin: "https://untrusted.example.com" },
+    });
+
+    try {
+      await new Promise<void>((resolve) => rejectedClient.once("connect_error", () => resolve()));
+      expect(rejectedClient.connected).toBe(false);
+      expect(warning).toHaveBeenCalledWith(
+        "[game-service] rejected Socket.IO handshake",
+        expect.stringContaining('"origin":"https://untrusted.example.com"'),
+      );
+      expect(warning).toHaveBeenCalledWith(
+        "[game-service] rejected Socket.IO handshake",
+        expect.stringContaining('"transport":"websocket"'),
+      );
+      expect(warning).toHaveBeenCalledWith(
+        "[game-service] rejected Socket.IO handshake",
+        expect.stringContaining('"path":"/socket.io/"'),
+      );
+    } finally {
+      rejectedClient.disconnect();
+      warning.mockRestore();
+    }
   });
 
   it("creates, joins, deals, pushes moves/passes/knock, and synchronizes rounds", async () => {

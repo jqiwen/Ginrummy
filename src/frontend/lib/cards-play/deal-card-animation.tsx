@@ -33,6 +33,7 @@ import {
   type PassStatusEvent,
   type PlayerId,
   type RoundResultEvent,
+  waitForGameSocket,
 } from '../socket';
 
 export default function DealCards({ roomId, host, userName}: { roomId: string; host: string; userName: string}) {
@@ -106,7 +107,13 @@ export default function DealCards({ roomId, host, userName}: { roomId: string; h
   }, [whosTurn, host]);
   
   async function startGame(){
-    const socket = connectGameSocket();
+    let socket;
+    try {
+      socket = await waitForGameSocket();
+    } catch {
+      alert("Game service is unavailable. Please try again.");
+      return;
+    }
     let thisGameID = matchID;
 
     if (roomId === 'tutorial') {

@@ -18,7 +18,21 @@ export interface GameService {
   io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 }
 
-export function createGameService(store: GameStore = gameStore): GameService {
+export const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "https://ginrummy.jqiwen.com",
+] as const;
+
+export function parseAllowedOrigins(configuredOrigins = ""): string[] {
+  return [...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins.split(",")]
+    .map((origin) => origin.trim())
+    .filter((origin, index, allOrigins) => origin.length > 0 && allOrigins.indexOf(origin) === index);
+}
+
+export function createGameService(
+  store: GameStore = gameStore,
+  configuredOrigins = process.env.FRONTEND_ORIGIN ?? "",
+): GameService {
   const httpServer = createHttpServer((request, response) => {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
     if (request.method === "GET" && pathname === "/health") {
@@ -31,13 +45,7 @@ export function createGameService(store: GameStore = gameStore): GameService {
     response.end(JSON.stringify({ error: "not_found" }));
   });
 
-  const origins = [
-    "http://localhost:3000",
-    "https://ginrummy.jqiwen.com",
-    ...(process.env.FRONTEND_ORIGIN ?? "").split(","),
-  ]
-    .map((origin) => origin.trim())
-    .filter((origin, index, allOrigins) => origin.length > 0 && allOrigins.indexOf(origin) === index);
+  const origins = parseAllowedOrigins(configuredOrigins);
   const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(
     httpServer,
     {
@@ -46,7 +54,22 @@ export function createGameService(store: GameStore = gameStore): GameService {
       allowUpgrades: false,
       allowRequest: (request, callback) => {
         const origin = request.headers.origin;
-        callback(null, origin === undefined || origins.includes(origin));
+        const allowed = origin === undefined || origins.includes(origin);
+
+        if (!allowed) {
+          const requestUrl = new URL(request.url ?? "/", "http://localhost");
+          console.warn(
+            "[game-service] rejected Socket.IO handshake",
+            JSON.stringify({
+              timestamp: new Date().toISOString(),
+              origin,
+              transport: requestUrl.searchParams.get("transport") ?? "unknown",
+              path: requestUrl.pathname,
+            }),
+          );
+        }
+
+        callback(null, allowed);
       },
     },
   );

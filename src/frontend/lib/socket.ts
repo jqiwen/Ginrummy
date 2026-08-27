@@ -127,6 +127,37 @@ export function connectGameSocket(): typeof gameSocket {
   return gameSocket;
 }
 
+export function waitForGameSocket(timeoutMs = 10_000): Promise<typeof gameSocket> {
+  const socket = connectGameSocket();
+  if (socket.connected) {
+    return Promise.resolve(socket);
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(`Game service connection timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const cleanup = () => {
+      window.clearTimeout(timeout);
+      socket.off("connect", onConnect);
+      socket.off("connect_error", onConnectError);
+    };
+    const onConnect = () => {
+      cleanup();
+      resolve(socket);
+    };
+    const onConnectError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    socket.once("connect", onConnect);
+    socket.once("connect_error", onConnectError);
+  });
+}
+
 export function authSignup(username: string, password: string): Promise<SocketResponse> {
   const socket = connectGameSocket();
   return new Promise((resolve) => socket.emit("auth:signup", { username, password }, resolve));

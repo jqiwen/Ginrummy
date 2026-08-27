@@ -1,0 +1,228 @@
+name: Deploy game service to Cloud Run
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "src/game-service/**"
+      - ".github/workflows/deploy-game-service.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: game-service-production
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+  GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
+  FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+
+jobs:
+  deploy:
+    name: Test, stage, verify, and promote
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          for name in GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REPOSITORY GCP_CLOUD_RUN_SERVICE FRONTEND_ORIGIN; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required repository variable: $name"
+              exit 1
+            fi
+          done
+          if [[ "$FRONTEND_ORIGIN" != https://* ]]; then
+            echo "FRONTEND_ORIGIN must start with https://"
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/game-service/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: src/game-service
+        run: npm ci
+
+      - name: Run backend tests
+        working-directory: src/game-service
+        run: npm test
+
+      - name: Build backend TypeScript
+        working-directory: src/game-service
+        run: npm run build
+
+      - name: Configure Artifact Registry authentication
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build immutable image
+        id: image
+        working-directory: src/game-service
+        shell: bash
+        run: |
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_ARTIFACT_REPOSITORY}/ginrummy-game-service:${GITHUB_SHA}"
+          docker build --tag "$IMAGE_URI" .
+          echo "uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+
+      - name: Push immutable image
+        run: docker push "${{ steps.image.outputs.uri }}"
+
+      - name: Deploy candidate revision without production traffic
+        id: candidate
+        shell: bash
+        run: |
+          TAG="candidate-${GITHUB_SHA:0:12}"
+          DEPLOY_JSON=$(gcloud run deploy "$GCP_CLOUD_RUN_SERVICE" \
+            --image "${{ steps.image.outputs.uri }}" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --port 8080 \
+            --no-use-http2 \
+            --ingress all \
+            --timeout 3600 \
+            --min-instances 0 \
+            --max-instances 1 \
+            --update-env-vars "FRONTEND_ORIGIN=$FRONTEND_ORIGIN" \
+            --no-traffic \
+            --tag "$TAG" \
+            --quiet \
+            --format json)
+
+          REVISION=$(printf '%s' "$DEPLOY_JSON" | jq -r '.status.latestCreatedRevisionName')
+          CANDIDATE_URL=$(printf '%s' "$DEPLOY_JSON" | jq -r --arg tag "$TAG" '.status.traffic[]? | select(.tag == $tag) | .url')
+          if [ -z "$REVISION" ] || [ "$REVISION" = "null" ]; then
+            echo "Cloud Run did not return a candidate revision name."
+            exit 1
+          fi
+          if [[ "$CANDIDATE_URL" != https://* ]]; then
+            echo "Cloud Run did not return a valid candidate URL."
+            exit 1
+          fi
+
+          {
+            echo "revision=$REVISION"
+            echo "tag=$TAG"
+            echo "url=$CANDIDATE_URL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate HTTP health
+        shell: bash
+        env:
+          CANDIDATE_URL: ${{ steps.candidate.outputs.url }}
+          REVISION: ${{ steps.candidate.outputs.revision }}
+        run: |
+          for attempt in $(seq 1 18); do
+            if curl --fail --silent --show-error --max-time 10 "$CANDIDATE_URL/health" > /dev/null; then
+              echo "HTTP health check: PASS"
+              exit 0
+            fi
+            echo "Health check attempt ${attempt}/18 failed; retrying in 5 seconds."
+            sleep 5
+          done
+
+          echo "HTTP health check: FAIL"
+          gcloud run revisions describe "$REVISION" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" || true
+          gcloud run services logs read "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --limit 100 || true
+          exit 1
+
+      - name: Verify candidate Socket.IO WebSocket
+        working-directory: src/game-service
+        env:
+          GAME_SERVICE_URL: ${{ steps.candidate.outputs.url }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        run: npm run smoke:websocket
+
+      - name: Promote verified revision to production
+        run: |
+          # Game state is currently stored in memory.
+          # Keep max instances at 1 until shared state such as Redis is introduced.
+          gcloud run services update-traffic "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --to-revisions "${{ steps.candidate.outputs.revision }}=100" \
+            --quiet
+
+      - name: Resolve active service URL
+        id: production
+        shell: bash
+        run: |
+          SERVICE_URL=$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --format='value(status.url)')
+          if [[ "$SERVICE_URL" != https://* ]]; then
+            echo "Cloud Run returned an invalid production service URL."
+            exit 1
+          fi
+          echo "url=$SERVICE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Verify active production revision
+        working-directory: src/game-service
+        shell: bash
+        env:
+          GAME_SERVICE_URL: ${{ steps.production.outputs.url }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        run: |
+          for attempt in $(seq 1 6); do
+            if curl --fail --silent --show-error --max-time 10 "$GAME_SERVICE_URL/health" > /dev/null; then
+              echo "HTTP health check: PASS"
+              break
+            fi
+            if [ "$attempt" -eq 6 ]; then
+              echo "HTTP health check: FAIL"
+              exit 1
+            fi
+            sleep 5
+          done
+          npm run smoke:websocket
+
+      - name: Remove candidate URL tag
+        run: |
+          gcloud run services update-traffic "$GCP_CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --remove-tags "${{ steps.candidate.outputs.tag }}" \
+            --quiet
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          {
+            echo "### Cloud Run deployment"
+            echo "- Revision: ${{ steps.candidate.outputs.revision }}"
+            echo "- Service URL: ${{ steps.production.outputs.url }}"
+            echo "- Image: ${{ steps.image.outputs.uri }}"
+            echo "- HTTP health check: PASS"
+            echo "- Socket.IO WebSocket connection: PASS"
+          } >> "$GITHUB_STEP_SUMMARY"
