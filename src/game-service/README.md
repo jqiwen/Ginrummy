@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-The service listens on [http://localhost:8080](http://localhost:8080) by default. Check it with `GET /health`. `FRONTEND_ORIGIN` accepts a comma-separated list when more than one frontend origin is needed; localhost and `https://jqiwen.github.io` are always allowed.
+The service listens on [http://localhost:8080](http://localhost:8080) by default. Check it with `GET /health`. `http://localhost:3000` is allowed for local development. `FRONTEND_ORIGIN` accepts a comma-separated list of additional exact origins and supplies `https://ginrummy.jqiwen.com` in production.
 
 Production and verification commands:
 

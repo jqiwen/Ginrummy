@@ -20,7 +20,6 @@ export interface GameService {
 
 export const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:3000",
-  "https://ginrummy.jqiwen.com",
 ] as const;
 
 export function parseAllowedOrigins(configuredOrigins = ""): string[] {

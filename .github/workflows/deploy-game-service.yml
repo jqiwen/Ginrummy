@@ -22,6 +22,8 @@ env:
   GCP_REGION: ${{ vars.GCP_REGION }}
   GCP_ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
   GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
+  GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+  GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
   FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
 
 jobs:
@@ -35,31 +37,30 @@ jobs:
       - name: Validate deployment configuration
         shell: bash
         run: |
-          for name in GCP_PROJECT_ID GCP_REGION GCP_ARTIFACT_REPOSITORY GCP_CLOUD_RUN_SERVICE FRONTEND_ORIGIN; do
+          missing=0
+          for name in \
+            GCP_PROJECT_ID \
+            GCP_REGION \
+            GCP_ARTIFACT_REPOSITORY \
+            GCP_CLOUD_RUN_SERVICE \
+            GCP_WORKLOAD_IDENTITY_PROVIDER \
+            GCP_SERVICE_ACCOUNT \
+            FRONTEND_ORIGIN; do
             if [ -z "${!name:-}" ]; then
               echo "Missing required repository variable: $name"
-              exit 1
+              missing=1
             fi
           done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
           if [[ "$FRONTEND_ORIGIN" != https://* ]]; then
             echo "FRONTEND_ORIGIN must start with https://"
             exit 1
           fi
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-      - name: Setup Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -76,6 +77,18 @@ jobs:
       - name: Build backend TypeScript
         working-directory: src/game-service
         run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Configure Artifact Registry authentication
         run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet

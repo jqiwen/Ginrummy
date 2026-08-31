@@ -30,15 +30,15 @@ function emitAck<T>(socket: Socket, event: string, payload: object): Promise<Res
 }
 
 describe("Socket.IO origin configuration", () => {
-  it("includes production and local defaults while normalizing configured origins", () => {
+  it("includes the local default and normalizes configured production origins", () => {
     expect(
       parseAllowedOrigins(
         " https://preview.example.com,https://ginrummy.jqiwen.com,,https://preview.example.com ",
       ),
     ).toEqual([
       "http://localhost:3000",
-      "https://ginrummy.jqiwen.com",
       "https://preview.example.com",
+      "https://ginrummy.jqiwen.com",
     ]);
   });
 });
@@ -51,7 +51,7 @@ describe("Socket.IO game flow", () => {
 
   beforeEach(async () => {
     store = new GameStore();
-    service = createGameService(store);
+    service = createGameService(store, "https://ginrummy.jqiwen.com");
     await new Promise<void>((resolve) => service.httpServer.listen(0, "127.0.0.1", resolve));
     const port = (service.httpServer.address() as AddressInfo).port;
     const url = `http://127.0.0.1:${port}`;

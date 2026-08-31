@@ -50,185 +50,78 @@ See [docs/MIGRATION_MAPPING.md](docs/MIGRATION_MAPPING.md) for the REST-to-WebSo
 
 ## Deployment architecture
 
-Production uses a static Next.js export at `https://ginrummy.jqiwen.com`. Browser clients connect directly over Socket.IO/WebSocket to the public HTTPS URL of the `ginrummy-game-service` Cloud Run service. Socket.IO selects secure WebSocket (`wss://`) automatically when `NEXT_PUBLIC_GAME_WS_URL` is an `https://` URL.
-
-Local development remains:
+Production delivery is split into two independent pipelines:
 
 ```text
-http://localhost:3000  ->  http://localhost:8080
+Frontend: GitHub -> npm ci -> Next.js static build -> GitHub Pages
+          -> https://ginrummy.jqiwen.com
+
+Backend:  GitHub -> npm ci -> tests -> TypeScript build -> Google WIF auth
+          -> Docker build -> Artifact Registry -> Cloud Run -> health/WebSocket verification
 ```
 
-The static game route uses a query parameter so GitHub Pages can serve one exported page:
+`.github/workflows/deploy-pages.yml` runs for frontend changes. It does not authenticate to Google Cloud or run `gcloud`; it injects the `CLOUD_RUN_GAME_SERVICE_URL` repository variable into the existing `NEXT_PUBLIC_GAME_WS_URL` client variable during the build.
+
+`.github/workflows/deploy-game-service.yml` runs for game-service changes. It validates all deployment variables, runs tests and the TypeScript build, authenticates through Workload Identity Federation, pushes an immutable image tagged with the commit SHA, deploys a no-traffic candidate, verifies HTTP health and a direct Socket.IO WebSocket connection, and then promotes the verified revision.
+
+The static game route remains compatible with GitHub Pages:
 
 ```text
 /game?roomId=<ROOM_ID>-<PLAYER_ID>
 ```
 
-## Google Cloud Run Deployment
+## Required GitHub repository variables
 
-Cloud Run deployment is intentionally manual in this phase. No Google Cloud resources are created by this repository or its GitHub Actions workflow.
+Configure these at **GitHub -> Repository -> Settings -> Secrets and variables -> Actions -> Variables**. They are repository variables, not Actions secrets.
 
-### 1. Google Cloud project setup
+| Variable | Expected value | Why it is needed | Workflow |
+| --- | --- | --- | --- |
+| `CLOUD_RUN_GAME_SERVICE_URL` | `https://ginrummy-game-service-rjr3zjal5a-pd.a.run.app` | Compiled into the static frontend as `NEXT_PUBLIC_GAME_WS_URL` | `deploy-pages.yml` |
+| `GCP_PROJECT_ID` | `ginrummy-506118` | Selects the Google Cloud project | `deploy-game-service.yml` |
+| `GCP_REGION` | `northamerica-northeast2` | Selects the Artifact Registry and Cloud Run region | `deploy-game-service.yml` |
+| `GCP_ARTIFACT_REPOSITORY` | `cloud-run-source-deploy` | Selects the Docker image repository | `deploy-game-service.yml` |
+| `GCP_CLOUD_RUN_SERVICE` | `ginrummy-game-service` | Selects the service that receives the candidate revision | `deploy-game-service.yml` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/869554899500/locations/global/workloadIdentityPools/github-actions/providers/github` | Exchanges the GitHub OIDC token for short-lived Google credentials | `deploy-game-service.yml` |
+| `GCP_SERVICE_ACCOUNT` | `ginrummy-github-deployer@ginrummy-506118.iam.gserviceaccount.com` | Identifies the least-privilege deployment identity | `deploy-game-service.yml` |
+| `FRONTEND_ORIGIN` | `https://ginrummy.jqiwen.com` | Configures the exact production origin allowed by Socket.IO CORS | `deploy-game-service.yml` |
 
-1. Open the Google Cloud Console.
-2. Create or select a Google Cloud project.
-3. Enable billing for that project.
-4. Install the Google Cloud CLI, or open Cloud Shell.
-5. Authenticate:
+The backend uses Google Workload Identity Federation. Do not create or store a service-account JSON key. The one-time provider and least-privilege IAM setup is documented in [docs/CICD_SETUP.md](docs/CICD_SETUP.md).
 
-   ```bash
-   gcloud auth login
-   ```
+## One-time GitHub and Google Cloud setup
 
-6. Select the project, replacing the placeholder with your real project ID:
+1. Complete the Workload Identity Federation and IAM setup in [docs/CICD_SETUP.md](docs/CICD_SETUP.md).
+2. Create all eight repository variables in the table above.
+3. In **Settings -> Pages**, keep **Source** set to **GitHub Actions** and keep the custom domain set to `ginrummy.jqiwen.com`.
+4. Keep the Cloud Run service publicly invokable so browser WebSocket clients and candidate verification can reach it.
+5. Deploy the backend first. If its service URL changes, update `CLOUD_RUN_GAME_SERVICE_URL`, then deploy the frontend.
 
-   ```bash
-   gcloud config set project <GCP_PROJECT_ID>
-   ```
+Both workflows also support manual runs from the Actions tab. Their push path filters are independent: frontend and its workflow file trigger Pages; game service and its workflow file trigger Cloud Run. The general CI workflow verifies both packages without deploying.
 
-7. Enable the APIs needed for a Cloud Run source deployment:
+## WebSocket and CORS configuration
 
-   ```bash
-   gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
-   ```
-
-### 2. Build and test the game service
-
-From the repository root:
-
-```bash
-cd src/game-service
-npm ci
-npm run build
-npm test
-npm start
-```
-
-`npm start` runs the compiled `dist/server.js`; it does not use `tsx`, watch mode, or a development server. In another terminal, verify the local health endpoint:
-
-```bash
-curl http://localhost:8080/health
-```
-
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-Stop the local process before deploying if it is no longer needed.
-
-### 3. Deploy from the game-service directory
-
-Run this exact command from `src/game-service`:
-
-```bash
-gcloud run deploy ginrummy-game-service \
-  --source . \
-  --region northamerica-northeast2 \
-  --allow-unauthenticated \
-  --timeout 3600 \
-  --min-instances 0 \
-  --max-instances 1 \
-  --session-affinity \
-  --set-env-vars FRONTEND_ORIGIN=https://ginrummy.jqiwen.com
-```
-
-This keeps the service public for browser clients and cost-conscious for a portfolio project. `min instances = 0` permits scale-to-zero, so the first connection after idle time may remain in a temporary connecting state while Cloud Run starts the container. The Socket.IO client logs `connect`, `disconnect`, `connect_error`, `reconnect_attempt`, and `reconnect` events and automatically reconnects.
-
-The `3600`-second request timeout is intentional: Cloud Run WebSocket requests are finite and can be disconnected after 60 minutes. Session affinity is enabled as a best-effort aid for reconnections, but **session affinity is not shared state and is not a correctness mechanism**.
-
-After deployment, copy the service URL from the command output or retrieve it with:
-
-```bash
-gcloud run services describe ginrummy-game-service \
-  --region northamerica-northeast2 \
-  --format='value(status.url)'
-```
-
-Do not guess or add a trailing path to this URL.
-
-### 4. Verify Cloud Run health
-
-Before connecting the frontend, open or request:
+Local development uses the fallback in `src/frontend/lib/socket.ts` and the example environment files:
 
 ```text
-https://<CLOUD_RUN_SERVICE_URL>/health
+http://localhost:3000 -> http://localhost:8080
 ```
 
-or:
-
-```bash
-curl https://<CLOUD_RUN_SERVICE_URL>/health
-```
-
-Continue only after it returns:
-
-```json
-{"status":"ok"}
-```
-
-### 5. Configure and deploy GitHub Pages
-
-1. In GitHub, open `jqiwen/ginrummy`.
-2. Open **Settings -> Secrets and variables -> Actions -> Variables**.
-3. Create a repository variable named `CLOUD_RUN_GAME_SERVICE_URL`.
-4. Set its value to the exact Cloud Run service URL, for example `https://<service-id>.a.run.app`. Do not add quotes and do not invent the URL.
-5. Open **Settings -> Pages**.
-6. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-7. Push the deployment changes to `master`, or manually run **Deploy frontend to GitHub Pages** from the Actions tab.
-8. Confirm the deployment environment reports `https://ginrummy.jqiwen.com`.
-
-The workflow exposes the repository variable only during the frontend build:
+Production receives the Cloud Run HTTPS service origin through this single mapping:
 
 ```text
-CLOUD_RUN_GAME_SERVICE_URL -> NEXT_PUBLIC_GAME_WS_URL
+CLOUD_RUN_GAME_SERVICE_URL -> NEXT_PUBLIC_GAME_WS_URL -> Socket.IO client
 ```
 
-It runs `npm ci`, builds the static export in `src/frontend/out`, uploads that directory, and deploys only the frontend. The workflow fails early if the repository variable is missing, which prevents publishing a build that points to localhost.
+The client passes the HTTPS origin to Socket.IO and restricts transport to WebSocket; Socket.IO therefore uses secure `wss://` from the HTTPS site. No Cloud Run URL or `ws://` URL is hardcoded into application source.
 
-### 6. Production multiplayer test
+The game service always permits `http://localhost:3000` for local development and reads the production origin from `FRONTEND_ORIGIN`. It uses exact origin matching and does not allow `Access-Control-Allow-Origin: *`.
 
-Health alone does not validate the real-time game. Use two separate browser windows, preferably one normal and one incognito:
+## Cloud Run operating constraints
 
-1. Open `https://ginrummy.jqiwen.com` in both windows.
-2. Player A creates a room and copies the room ID.
-3. Player B joins that room.
-4. Verify both players see the join and Player A can start the game.
-5. Start the game and deal.
-6. Draw a card and discard a card.
-7. Verify the other browser receives the update and the turn switches.
-8. Verify pass behavior.
-9. Verify knock and scoring.
-10. Verify the next round starts for both players.
-11. Refresh or briefly interrupt one browser connection and verify the client reconnects/resumes when practical.
+The deployment keeps port `8080`, request timeout `3600`, `min instances = 0`, and `max instances = 1`. Scale-to-zero minimizes idle cost; the first connection after an idle period may wait for a cold start and the Socket.IO client will reconnect automatically.
 
-### Current single-instance limitation
+Rooms and match state are currently stored in one process's memory. Production must remain at one maximum instance until shared state such as Redis is added; otherwise players in the same room could reach different in-memory maps.
 
-Rooms, socket memberships, matches, and round state are held in memory by `src/game-service/src/state/gameStore.ts`. Two Cloud Run instances would have independent maps, so players in one room could be routed to different state and the game would fail. For that reason, production **must keep `max instances = 1`** even when session affinity is enabled.
-
-TODO: Move game/session state to Redis before enabling multiple Cloud Run instances.
-
-Future Redis-backed room/session state would give all instances a shared source of truth (and cross-instance event coordination), allowing `max instances` to be raised safely. Redis is deliberately not part of this deployment phase.
-
-## Deployment environment variables
-
-Frontend (`src/frontend/.env.example`):
-
-```env
-NEXT_PUBLIC_GAME_WS_URL=http://localhost:8080
-```
-
-For the GitHub Pages build, the value must be the Cloud Run HTTPS service URL and comes from the `CLOUD_RUN_GAME_SERVICE_URL` repository variable.
-
-Game service (`src/game-service/.env.example`):
-
-```env
-PORT=8080
-FRONTEND_ORIGIN=http://localhost:3000
-```
-
-Cloud Run supplies `PORT` automatically. The deployment command sets `FRONTEND_ORIGIN=https://ginrummy.jqiwen.com`. The service also permits `http://localhost:3000` so local development continues to work. No runtime credentials are required or committed.
+For a production multiplayer check, open `https://ginrummy.jqiwen.com` in two browser sessions and verify create/join, deal, draw, discard, turn changes, knock, scoring, round synchronization, and reconnection.
 
 ## Acknowledgments
 Special thanks to Professor Paul Rapoport for his guidance on game rules and mechanics, and to all team members for their hard work in bringing this project to life.

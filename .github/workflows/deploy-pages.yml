@@ -9,11 +9,6 @@ on:
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -21,56 +16,36 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-      - name: Setup Google Cloud CLI
-        uses: google-github-actions/setup-gcloud@v3
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-
-      - name: Resolve active game service URL
-        id: game-service
+      - name: Validate frontend deployment configuration
         shell: bash
         env:
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          GCP_REGION: ${{ vars.GCP_REGION }}
-          GCP_CLOUD_RUN_SERVICE: ${{ vars.GCP_CLOUD_RUN_SERVICE }}
+          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
         run: |
-          for name in GCP_PROJECT_ID GCP_REGION GCP_CLOUD_RUN_SERVICE; do
-            if [ -z "${!name:-}" ]; then
-              echo "Missing required repository variable: $name"
-              exit 1
-            fi
-          done
-
-          GAME_SERVICE_URL=$(gcloud run services describe "$GCP_CLOUD_RUN_SERVICE" \
-            --project "$GCP_PROJECT_ID" \
-            --region "$GCP_REGION" \
-            --format='value(status.url)')
-          if [[ "$GAME_SERVICE_URL" != https://* ]]; then
-            echo "Cloud Run returned an invalid game service URL."
+          if [ -z "$NEXT_PUBLIC_GAME_WS_URL" ]; then
+            echo "Missing required repository variable: CLOUD_RUN_GAME_SERVICE_URL"
             exit 1
           fi
-          echo "url=$GAME_SERVICE_URL" >> "$GITHUB_OUTPUT"
+          if [[ "$NEXT_PUBLIC_GAME_WS_URL" != https://* ]]; then
+            echo "CLOUD_RUN_GAME_SERVICE_URL must start with https://"
+            exit 1
+          fi
 
       - name: Install frontend dependencies
         working-directory: src/frontend
@@ -79,21 +54,24 @@ jobs:
       - name: Build static frontend
         working-directory: src/frontend
         env:
-          NEXT_PUBLIC_GAME_WS_URL: ${{ steps.game-service.outputs.url }}
+          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: src/frontend/out
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

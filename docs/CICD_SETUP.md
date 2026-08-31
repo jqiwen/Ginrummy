@@ -87,9 +87,10 @@ The deployment identity is deliberately not granted Owner, Editor, Cloud Run Adm
 
 ## Repository variables
 
-Set these non-secret repository variables after authenticating `gh`:
+Set these non-secret repository variables under **GitHub -> Repository -> Settings -> Secrets and variables -> Actions -> Variables**. After authenticating `gh`, the equivalent commands are:
 
 ```bash
+gh variable set CLOUD_RUN_GAME_SERVICE_URL --repo jqiwen/Ginrummy --body "https://ginrummy-game-service-rjr3zjal5a-pd.a.run.app"
 gh variable set GCP_PROJECT_ID --repo jqiwen/Ginrummy --body "ginrummy-506118"
 gh variable set GCP_REGION --repo jqiwen/Ginrummy --body "northamerica-northeast2"
 gh variable set GCP_ARTIFACT_REPOSITORY --repo jqiwen/Ginrummy --body "cloud-run-source-deploy"
@@ -101,10 +102,12 @@ gh variable set FRONTEND_ORIGIN --repo jqiwen/Ginrummy --body "https://ginrummy.
 
 No JSON key, access token, or Google Cloud secret should be added to GitHub.
 
+`CLOUD_RUN_GAME_SERVICE_URL` is used only by the frontend build and must be the exact HTTPS service origin returned by Cloud Run. The other seven variables are used only by the backend deployment workflow.
+
 ## Workflow behavior
 
 - `ci.yml` runs frontend and backend verification without deploying.
 - `deploy-game-service.yml` stages a no-traffic revision, checks HTTP and direct WebSocket connectivity, and then assigns 100% traffic to that exact revision.
-- `deploy-pages.yml` authenticates with the same WIF identity, queries the active Cloud Run service URL, and injects it as `NEXT_PUBLIC_GAME_WS_URL` during the static build.
+- `deploy-pages.yml` does not authenticate with Google Cloud. It injects `CLOUD_RUN_GAME_SERVICE_URL` as `NEXT_PUBLIC_GAME_WS_URL` during the static build and deploys the export to GitHub Pages.
 
-Manual runs must target `master`, which is also enforced by the WIF provider condition.
+Manual backend runs must target `master`, which is also enforced by the WIF provider condition.
