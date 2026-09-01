@@ -53,31 +53,7 @@ npm run build
 npm run dev
 ```
 
-Copy each directory's `.env.example` first. The frontend runs on [http://localhost:3000](http://localhost:3000), and the WebSocket game service runs on [http://localhost:8080](http://localhost:8080).
 
-See [docs/MIGRATION_MAPPING.md](docs/MIGRATION_MAPPING.md) for the REST-to-WebSocket migration map.
-
-## Deployment architecture
-
-Production delivery is split into two independent pipelines:
-
-```text
-Frontend: GitHub -> npm ci -> Next.js static build -> GitHub Pages
-          -> https://ginrummy.jqiwen.com
-
-Backend:  GitHub -> npm ci -> tests -> TypeScript build -> Google WIF auth
-          -> Docker build -> Artifact Registry -> Cloud Run -> health/WebSocket verification
-```
-
-`.github/workflows/deploy-pages.yml` runs for frontend changes. It does not authenticate to Google Cloud or run `gcloud`; it reads the public `NEXT_PUBLIC_GAME_WS_URL` repository variable directly during the build.
-
-`.github/workflows/deploy-game-service.yml` runs for game-service changes. It validates all deployment variables, runs tests and the TypeScript build, authenticates through Workload Identity Federation, pushes an immutable image tagged with the commit SHA, deploys a no-traffic candidate, verifies HTTP health and a direct Socket.IO WebSocket connection, and then promotes the verified revision.
-
-The static game route remains compatible with GitHub Pages while the internal room UUID stays out of the address bar:
-
-```text
-/game
-```
 
 ## Acknowledgments
 Special thanks to Professor Paul Rapoport for his guidance on game rules and mechanics, and to all team members for their hard work in bringing this project to life.
