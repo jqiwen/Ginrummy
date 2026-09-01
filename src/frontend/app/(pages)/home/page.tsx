@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, BookOpenText, Diamond, Play, UsersRound } from "lucide-react";
+import { ArrowRight, BookOpenText, Diamond, LoaderCircle, Play, UsersRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSelector } from "react-redux";
@@ -86,8 +86,35 @@ export default function HomePage() {
                     <div className="grid grid-cols-2 gap-4">
                       {gameModes.map((mode) => {
                         const Icon = mode.icon;
+                        const isPreparing = mode.requiresAccount && authStatus === "initializing";
                         const needsLogin = mode.requiresAccount && authStatus !== "authenticated";
-                        const href = needsLogin ? "/login?returnTo=%2Fpvp" : mode.href;
+                        const href = needsLogin ? "/login?next=%2Fpvp" : mode.href;
+
+                        const content = (
+                          <>
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#c8aa63]/45 bg-[#07140f] text-[#d8bb71]">
+                              {isPreparing ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-serif text-xl font-semibold text-[#fff4d5]">
+                                {isPreparing ? "Preparing table…" : mode.title}
+                              </span>
+                              <span className="mt-1 block text-sm leading-5 text-[#d8d0be]/65">
+                                {isPreparing ? "Restoring your authenticated session." : mode.description}
+                              </span>
+                              {needsLogin && !isPreparing && (
+                                <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-[#cbb270]">
+                                  Account required
+                                </span>
+                              )}
+                            </span>
+                            {!isPreparing && <ArrowRight className="h-5 w-5 shrink-0 text-[#cdb16b] transition-transform duration-200 group-hover/mode:translate-x-1" />}
+                          </>
+                        );
+
+                        if (isPreparing) {
+                          return <div key={mode.href} role="status" aria-label="Preparing private match" className="flex min-h-32 items-center gap-5 rounded-sm border border-[#a98d50]/25 bg-[#10271d]/70 p-6 opacity-75">{content}</div>;
+                        }
 
                         return (
                           <Link
@@ -95,23 +122,7 @@ export default function HomePage() {
                             href={href}
                             className="group/mode flex min-h-32 items-center gap-5 rounded-sm border border-[#a98d50]/35 bg-[#10271d] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#d2b66e]/75 hover:bg-[#153126] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d2b66e]"
                           >
-                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#c8aa63]/45 bg-[#07140f] text-[#d8bb71]">
-                              <Icon className="h-5 w-5" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-serif text-xl font-semibold text-[#fff4d5]">
-                                {mode.title}
-                              </span>
-                              <span className="mt-1 block text-sm leading-5 text-[#d8d0be]/65">
-                                {mode.description}
-                              </span>
-                              {needsLogin && (
-                                <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-[#cbb270]">
-                                  Account required
-                                </span>
-                              )}
-                            </span>
-                            <ArrowRight className="h-5 w-5 shrink-0 text-[#cdb16b] transition-transform duration-200 group-hover/mode:translate-x-1" />
+                            {content}
                           </Link>
                         );
                       })}

@@ -93,6 +93,7 @@ Configure these at **GitHub -> Repository -> Settings -> Secrets and variables -
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/869554899500/locations/global/workloadIdentityPools/github-actions/providers/github` | Exchanges the GitHub OIDC token for short-lived Google credentials | `deploy-game-service.yml` |
 | `GCP_SERVICE_ACCOUNT` | `ginrummy-github-deployer@ginrummy-506118.iam.gserviceaccount.com` | Identifies the least-privilege deployment identity | `deploy-game-service.yml` |
 | `FRONTEND_ORIGIN` | `https://ginrummy.jqiwen.com` | Configures the exact production origin allowed by Socket.IO CORS | `deploy-game-service.yml` |
+| `NEXT_PUBLIC_SITE_URL` | `https://ginrummy.jqiwen.com` | Sets the production email-confirmation return origin | `deploy-pages.yml` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Configures the browser client and is mapped to `SUPABASE_URL` on Cloud Run | Both deployment workflows |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public anon/publishable key | Configures the browser client and is mapped to `SUPABASE_ANON_KEY` on Cloud Run | Both deployment workflows |
 
@@ -102,7 +103,7 @@ The backend uses Google Workload Identity Federation. Do not create or store a s
 
 1. Complete the Workload Identity Federation and IAM setup in [docs/CICD_SETUP.md](docs/CICD_SETUP.md).
 2. Apply and configure Supabase by following [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md).
-3. Create all ten repository variables in the table above.
+3. Create all eleven repository variables in the table above.
 4. In **Settings -> Pages**, keep **Source** set to **GitHub Actions** and keep the custom domain set to `ginrummy.jqiwen.com`.
 5. Keep the Cloud Run service publicly invokable so browser WebSocket clients and candidate verification can reach it.
 6. Deploy the backend first. If its service URL changes, update `CLOUD_RUN_GAME_SERVICE_URL`, then deploy the frontend.

@@ -55,11 +55,15 @@ Site URL: https://ginrummy.jqiwen.com
 Add these redirect URLs:
 
 ```text
-https://ginrummy.jqiwen.com/login/
-http://localhost:3000/login/
+https://ginrummy.jqiwen.com/**
+http://localhost:3000/**
 ```
 
-Keep the trailing slash because the production frontend is a static Next.js export with `trailingSlash: true`.
+The `/**` patterns allow the static export's trailing-slash routes, including `/login/`.
+
+This Dashboard change is manual. Codex cannot change the Supabase project settings. Follow the exact path:
+
+**Supabase → Ginrummy project → Authentication → URL Configuration**
 
 ## 5. Copy the public project values
 
@@ -74,6 +78,7 @@ For local frontend development, copy `src/frontend/.env.example` to `src/fronten
 
 ```dotenv
 NEXT_PUBLIC_GAME_WS_URL=http://localhost:8080
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
@@ -93,16 +98,17 @@ Open **GitHub → Repository → Settings → Secrets and variables → Actions 
 
 | Variable | Value |
 | --- | --- |
+| `NEXT_PUBLIC_SITE_URL` | `https://ginrummy.jqiwen.com` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public anon/publishable key |
 
-The Pages workflow compiles these into the static browser bundle. The Cloud Run workflow maps the same repository variables to `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the game-service revision. This avoids maintaining duplicate values.
+The Pages workflow compiles these into the static browser bundle. `NEXT_PUBLIC_SITE_URL` controls the email-confirmation destination; production must use `https://ginrummy.jqiwen.com`. The Cloud Run workflow maps the Supabase repository variables to `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the game-service revision. This avoids maintaining duplicate Supabase values.
 
 ## 7. Deploy in order
 
 1. Apply both SQL migrations in filename order.
 2. Configure Email/Password and the URL allowlist.
-3. Add the two repository variables.
+3. Add the three frontend repository variables.
 4. Run **Deploy game service to Cloud Run** so the service can verify access tokens.
 5. Run **Deploy frontend to GitHub Pages** so the static bundle receives the public Supabase configuration.
 

@@ -105,7 +105,7 @@ export function HeaderBar() {
 
       <div className="flex h-10 min-w-[154px] items-center justify-end gap-1.5">
         {logoutError && <span role="alert" className="hidden text-xs text-[#ffb4a7] sm:inline">Sign out failed</span>}
-        {user.status === "loading" && <div aria-label="Restoring session" className="h-8 w-28 animate-pulse rounded-sm border border-[#9c8248]/20 bg-[#d0b36d]/10" />}
+        {user.status === "initializing" && <div aria-label="Restoring session" className="h-8 w-28 animate-pulse rounded-sm border border-[#9c8248]/20 bg-[#d0b36d]/10" />}
         {user.status === "unauthenticated" && (
           <>
             <Button asChild size="sm" variant="ghost" className={surfaceButtonClass}><Link href="/login">Log in</Link></Button>

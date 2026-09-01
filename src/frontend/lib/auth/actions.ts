@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { emailConfirmationRedirectUrl } from "./site-url";
 import type { LoginValues, SignupValues } from "./validation";
 
 export interface Profile {
@@ -75,13 +76,6 @@ function requireClient() {
   }
 }
 
-function emailRedirectUrl(): string | undefined {
-  if (typeof window === "undefined") {
-    return undefined;
-  }
-  return new URL("/login/", window.location.origin).toString();
-}
-
 export async function signInWithEmail(values: LoginValues): Promise<Session> {
   const supabase = requireClient();
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -139,7 +133,7 @@ export async function signUpWithEmail(values: SignupValues): Promise<SignupResul
           display_name: values.username,
           username: values.username,
         },
-        emailRedirectTo: emailRedirectUrl(),
+        emailRedirectTo: emailConfirmationRedirectUrl(),
       },
     });
   } catch (error) {

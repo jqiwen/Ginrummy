@@ -47,7 +47,7 @@ function GameContent() {
 
   useEffect(() => {
     if (!isTutorial && user.status === "unauthenticated") {
-      router.replace("/login?returnTo=%2Fpvp");
+      router.replace("/login?next=%2Fpvp");
     }
   }, [isTutorial, router, user.status]);
 

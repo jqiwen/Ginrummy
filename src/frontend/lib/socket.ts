@@ -157,6 +157,7 @@ export const gameSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io
 let gameSocketAccessToken: string | null = null;
 
 export function setGameSocketAccessToken(accessToken: string | null, reconnect = false): void {
+  const tokenChanged = gameSocketAccessToken !== accessToken;
   gameSocketAccessToken = accessToken;
   gameSocket.auth = accessToken ? { accessToken } : {};
 
@@ -165,7 +166,7 @@ export function setGameSocketAccessToken(accessToken: string | null, reconnect =
     return;
   }
 
-  if (reconnect && gameSocket.connected) {
+  if (reconnect && tokenChanged && gameSocket.connected) {
     gameSocket.disconnect().connect();
   }
 }

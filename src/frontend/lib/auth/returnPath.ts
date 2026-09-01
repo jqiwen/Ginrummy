@@ -12,5 +12,5 @@ export function returnPathFromLocation(): string {
     return "/home";
   }
   const params = new URLSearchParams(window.location.search);
-  return safeReturnPath(params.get("returnTo"));
+  return safeReturnPath(params.get("next") ?? params.get("returnTo"));
 }

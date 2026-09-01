@@ -37,6 +37,7 @@ jobs:
         shell: bash
         env:
           NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
@@ -46,6 +47,14 @@ jobs:
           fi
           if [[ "$NEXT_PUBLIC_GAME_WS_URL" != https://* ]]; then
             echo "CLOUD_RUN_GAME_SERVICE_URL must start with https://"
+            exit 1
+          fi
+          if [ -z "$NEXT_PUBLIC_SITE_URL" ]; then
+            echo "Missing required repository variable: NEXT_PUBLIC_SITE_URL"
+            exit 1
+          fi
+          if [ "$NEXT_PUBLIC_SITE_URL" != "https://ginrummy.jqiwen.com" ]; then
+            echo "NEXT_PUBLIC_SITE_URL must be https://ginrummy.jqiwen.com"
             exit 1
           fi
           if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
@@ -69,6 +78,7 @@ jobs:
         working-directory: src/frontend
         env:
           NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build

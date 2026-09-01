@@ -45,6 +45,7 @@ describe("signUpWithEmail", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.NEXT_PUBLIC_SITE_URL = "https://ginrummy.jqiwen.com";
     consoleError = jest.spyOn(console, "error").mockImplementation(() => undefined);
   });
 
@@ -114,10 +115,15 @@ describe("signUpWithEmail", () => {
   });
 
   it("returns the email-confirmation result after successful auth signup", async () => {
-    mockSupabase({});
+    const { signUp } = mockSupabase({});
     await expect(signUpWithEmail(values)).resolves.toMatchObject({
       email: values.email,
       session: null,
     });
+    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({
+        emailRedirectTo: "https://ginrummy.jqiwen.com/login/?confirmed=1",
+      }),
+    }));
   });
 });

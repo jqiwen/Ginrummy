@@ -1,71 +1,56 @@
 "use client";
 
 import type { Session } from "@supabase/supabase-js";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 
-import { loadProfile } from "@/lib/auth/actions";
-import { setGameSocketAccessToken } from "@/lib/socket";
+import { clearAuthenticatedSession, initializeAuthenticatedSession } from "@/lib/auth/session-initialization";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { AppDispatch } from "@shared-store/index";
-import { setAuthenticatedUser, setUnauthenticated } from "@shared-store/slices/user";
-
-function metadataString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
 
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch<AppDispatch>();
-  const previousUserId = useRef<string | null>(null);
-  const previousAccessToken = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
     let revision = 0;
+    let authEventObserved = false;
 
-    const applySession = async (session: Session | null) => {
-      const currentRevision = ++revision;
-      const nextUserId = session?.user.id ?? null;
-      const nextAccessToken = session?.access_token ?? null;
-      const identityChanged = previousUserId.current !== nextUserId;
-      const tokenChanged = previousAccessToken.current !== nextAccessToken;
-      previousUserId.current = nextUserId;
-      previousAccessToken.current = nextAccessToken;
-      setGameSocketAccessToken(nextAccessToken, identityChanged || tokenChanged);
-
+    const applySession = async (session: Session | null, currentRevision: number) => {
+      if (!active || currentRevision !== revision) return;
       if (!session) {
-        if (active) dispatch(setUnauthenticated());
+        clearAuthenticatedSession(dispatch);
         return;
       }
-
-      const profile = await loadProfile(session.user.id);
-      if (!active || currentRevision !== revision) {
-        return;
+      try {
+        await initializeAuthenticatedSession(session, dispatch, {
+          shouldApply: () => active && currentRevision === revision,
+        });
+      } catch (error) {
+        if (!active || currentRevision !== revision) return;
+        console.error("[auth] Session initialization failed", error);
+        clearAuthenticatedSession(dispatch);
       }
+    };
 
-      const metadata = session.user.user_metadata;
-      const fallbackUsername = metadataString(metadata.username)
-        ?? session.user.email?.split("@")[0]
-        ?? "player";
-      dispatch(setAuthenticatedUser({
-        id: session.user.id,
-        email: session.user.email ?? "",
-        username: profile?.username ?? fallbackUsername,
-        displayName: profile?.displayName ?? metadataString(metadata.display_name) ?? fallbackUsername,
-      }));
+    const scheduleSession = (session: Session | null) => {
+      const currentRevision = ++revision;
+      window.setTimeout(() => void applySession(session, currentRevision), 0);
     };
 
     let subscription: { unsubscribe: () => void } | undefined;
     try {
       const supabase = getSupabaseBrowserClient();
-      void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+      void supabase.auth.getSession().then(({ data }) => {
+        if (!authEventObserved) scheduleSession(data.session);
+      });
       subscription = supabase.auth.onAuthStateChange((_event, session) => {
-        window.setTimeout(() => void applySession(session), 0);
+        authEventObserved = true;
+        scheduleSession(session);
       }).data.subscription;
     } catch (error) {
       console.error("[auth] Supabase initialization failed", error);
-      setGameSocketAccessToken(null, true);
-      dispatch(setUnauthenticated());
+      clearAuthenticatedSession(dispatch);
     }
 
     return () => {

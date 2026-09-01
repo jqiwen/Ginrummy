@@ -98,13 +98,14 @@ gh variable set GCP_CLOUD_RUN_SERVICE --repo jqiwen/Ginrummy --body "ginrummy-ga
 gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER --repo jqiwen/Ginrummy --body "projects/869554899500/locations/global/workloadIdentityPools/github-actions/providers/github"
 gh variable set GCP_SERVICE_ACCOUNT --repo jqiwen/Ginrummy --body "ginrummy-github-deployer@ginrummy-506118.iam.gserviceaccount.com"
 gh variable set FRONTEND_ORIGIN --repo jqiwen/Ginrummy --body "https://ginrummy.jqiwen.com"
+gh variable set NEXT_PUBLIC_SITE_URL --repo jqiwen/Ginrummy --body "https://ginrummy.jqiwen.com"
 gh variable set NEXT_PUBLIC_SUPABASE_URL --repo jqiwen/Ginrummy --body "<SUPABASE_PROJECT_URL>"
 gh variable set NEXT_PUBLIC_SUPABASE_ANON_KEY --repo jqiwen/Ginrummy --body "<SUPABASE_PUBLIC_ANON_KEY>"
 ```
 
 No JSON key, access token, or Google Cloud secret should be added to GitHub.
 
-`CLOUD_RUN_GAME_SERVICE_URL` is used only by the frontend build and must be the exact HTTPS service origin returned by Cloud Run. The two `NEXT_PUBLIC_SUPABASE_*` values are used by both workflows: Pages embeds them in the browser bundle, while Cloud Run maps them to `SUPABASE_URL` and `SUPABASE_ANON_KEY` for verified token lookups. The remaining seven variables are used only by the backend deployment workflow.
+`CLOUD_RUN_GAME_SERVICE_URL` and `NEXT_PUBLIC_SITE_URL` are used only by the frontend build; the site URL must be `https://ginrummy.jqiwen.com` in production. The two `NEXT_PUBLIC_SUPABASE_*` values are used by both workflows: Pages embeds them in the browser bundle, while Cloud Run maps them to `SUPABASE_URL` and `SUPABASE_ANON_KEY` for verified token lookups. The remaining seven variables are used only by the backend deployment workflow.
 
 The Supabase anon/publishable key is intentionally public. Never add a service-role key to GitHub or the frontend. Complete the database and Auth configuration in [AUTH_SETUP.md](AUTH_SETUP.md) before deploying.
 

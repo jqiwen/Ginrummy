@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-export type AuthenticationStatus = "authenticated" | "loading" | "unauthenticated";
+export type AuthenticationStatus = "authenticated" | "initializing" | "unauthenticated";
 
 export interface UserState {
   id: string | null;
@@ -15,7 +15,7 @@ const initialState: UserState = {
   email: "",
   username: "",
   displayName: "",
-  status: "loading",
+  status: "initializing",
 };
 
 const userSlice = createSlice({
@@ -26,12 +26,12 @@ const userSlice = createSlice({
       state,
       action: PayloadAction<Pick<UserState, "displayName" | "email" | "id" | "username">>,
     ) => ({ ...action.payload, status: "authenticated" }),
-    setAuthLoading: (state) => {
-      state.status = "loading";
+    setAuthInitializing: (state) => {
+      state.status = "initializing";
     },
     setUnauthenticated: () => ({ ...initialState, status: "unauthenticated" as const }),
   },
 });
 
-export const { setAuthenticatedUser, setAuthLoading, setUnauthenticated } = userSlice.actions;
+export const { setAuthenticatedUser, setAuthInitializing, setUnauthenticated } = userSlice.actions;
 export default userSlice.reducer;

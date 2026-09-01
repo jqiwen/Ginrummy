@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import HomePage from "@/app/(pages)/home/page";
 import PvpPage from "@/app/(pages)/pvp/page";
 
 const replace = jest.fn();
@@ -9,6 +10,7 @@ const sendInvite = jest.fn();
 const acceptInvite = jest.fn();
 const declineInvite = jest.fn();
 const cancelInvite = jest.fn();
+let authStatus = "authenticated";
 
 const invitationState = {
   received: [{
@@ -30,13 +32,22 @@ const invitationState = {
 };
 
 jest.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
-jest.mock("react-redux", () => ({ useSelector: () => "authenticated" }));
+jest.mock("react-redux", () => ({ useSelector: () => authStatus }));
 jest.mock("@/lib/my-components/header-bar", () => ({ HeaderBar: () => <div data-testid="header" /> }));
 jest.mock("@/lib/invites/invitation-provider", () => ({ useInvitations: () => invitationState }));
+jest.mock("@/components/ui/drawer", () => ({
+  Drawer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  DrawerContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DrawerDescription: ({ children }: { children: React.ReactNode }) => <p>{children}</p>,
+  DrawerHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DrawerTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DrawerTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
 describe("Private Match", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    authStatus = "authenticated";
     searchPlayers.mockResolvedValue([
       { id: "guest", username: "guestplayer", displayName: "Guest Player" },
     ]);
@@ -44,6 +55,19 @@ describe("Private Match", () => {
     acceptInvite.mockResolvedValue(undefined);
     declineInvite.mockResolvedValue(undefined);
     cancelInvite.mockResolvedValue(undefined);
+  });
+
+  it("redirects a logged-out player to login with the multiplayer destination", async () => {
+    authStatus = "unauthenticated";
+    render(<PvpPage />);
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login?next=%2Fpvp"));
+  });
+
+  it("sends a logged-out Play with a Friend click to login with its destination", () => {
+    authStatus = "unauthenticated";
+    render(<HomePage />);
+    expect(screen.getByRole("link", { name: /Play with a Friend/i }))
+      .toHaveAttribute("href", "/login?next=%2Fpvp");
   });
 
   it("debounces public username search and never renders an email", async () => {

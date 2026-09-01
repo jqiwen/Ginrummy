@@ -24,11 +24,11 @@ export default function PvpPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (authStatus === "unauthenticated") router.replace("/login?returnTo=%2Fpvp");
+    if (authStatus === "unauthenticated") router.replace("/login?next=%2Fpvp");
   }, [authStatus, router]);
 
   if (authStatus !== "authenticated") {
-    return <div className="flex min-h-screen items-center justify-center bg-[#06110d] text-[#d8d1bf]/65"><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />Restoring your seat…</div>;
+    return <div className="min-h-screen bg-[#06110d] text-[#d8d1bf]/65"><HeaderBar /><div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center"><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />Preparing your private table…</div></div>;
   }
 
   return <div className="min-h-screen bg-[#06110d] text-[#f5edd9]"><HeaderBar /><PrivateMatch /></div>;

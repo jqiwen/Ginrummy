@@ -20,7 +20,7 @@ export default function AccountPage() {
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
-    if (user.status === "unauthenticated") router.replace("/login?returnTo=%2Faccount");
+    if (user.status === "unauthenticated") router.replace("/login?next=%2Faccount");
   }, [router, user.status]);
 
   if (user.status !== "authenticated") {
