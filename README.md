@@ -69,7 +69,7 @@ Backend:  GitHub -> npm ci -> tests -> TypeScript build -> Google WIF auth
           -> Docker build -> Artifact Registry -> Cloud Run -> health/WebSocket verification
 ```
 
-`.github/workflows/deploy-pages.yml` runs for frontend changes. It does not authenticate to Google Cloud or run `gcloud`; it injects the `CLOUD_RUN_GAME_SERVICE_URL` repository variable into the existing `NEXT_PUBLIC_GAME_WS_URL` client variable during the build.
+`.github/workflows/deploy-pages.yml` runs for frontend changes. It does not authenticate to Google Cloud or run `gcloud`; it reads the public `NEXT_PUBLIC_GAME_WS_URL` repository variable directly during the build.
 
 `.github/workflows/deploy-game-service.yml` runs for game-service changes. It validates all deployment variables, runs tests and the TypeScript build, authenticates through Workload Identity Federation, pushes an immutable image tagged with the commit SHA, deploys a no-traffic candidate, verifies HTTP health and a direct Socket.IO WebSocket connection, and then promotes the verified revision.
 
@@ -85,7 +85,7 @@ Configure these at **GitHub -> Repository -> Settings -> Secrets and variables -
 
 | Variable | Expected value | Why it is needed | Workflow |
 | --- | --- | --- | --- |
-| `CLOUD_RUN_GAME_SERVICE_URL` | `https://ginrummy-game-service-rjr3zjal5a-pd.a.run.app` | Compiled into the static frontend as `NEXT_PUBLIC_GAME_WS_URL` | `deploy-pages.yml` |
+| `NEXT_PUBLIC_GAME_WS_URL` | `https://<cloud-run-game-service-url>` | Compiled into the static frontend as the Socket.IO service origin | `deploy-pages.yml` |
 | `GCP_PROJECT_ID` | `ginrummy-506118` | Selects the Google Cloud project | `deploy-game-service.yml` |
 | `GCP_REGION` | `northamerica-northeast2` | Selects the Artifact Registry and Cloud Run region | `deploy-game-service.yml` |
 | `GCP_ARTIFACT_REPOSITORY` | `cloud-run-source-deploy` | Selects the Docker image repository | `deploy-game-service.yml` |
@@ -106,7 +106,7 @@ The backend uses Google Workload Identity Federation. Do not create or store a s
 3. Create all eleven repository variables in the table above.
 4. In **Settings -> Pages**, keep **Source** set to **GitHub Actions** and keep the custom domain set to `ginrummy.jqiwen.com`.
 5. Keep the Cloud Run service publicly invokable so browser WebSocket clients and candidate verification can reach it.
-6. Deploy the backend first. If its service URL changes, update `CLOUD_RUN_GAME_SERVICE_URL`, then deploy the frontend.
+6. Deploy the backend first. If its service URL changes, update `NEXT_PUBLIC_GAME_WS_URL`, then deploy the frontend.
 
 Both workflows also support manual runs from the Actions tab. Their push path filters are independent: frontend and its workflow file trigger Pages; game service and its workflow file trigger Cloud Run. The general CI workflow verifies both packages without deploying.
 
@@ -118,10 +118,10 @@ Local development uses the fallback in `src/frontend/lib/socket.ts` and the exam
 http://localhost:3000 -> http://localhost:8080
 ```
 
-Production receives the Cloud Run HTTPS service origin through this single mapping:
+Production receives the Cloud Run HTTPS service origin through this public build variable:
 
 ```text
-CLOUD_RUN_GAME_SERVICE_URL -> NEXT_PUBLIC_GAME_WS_URL -> Socket.IO client
+NEXT_PUBLIC_GAME_WS_URL -> Socket.IO client
 ```
 
 The client passes the HTTPS origin to Socket.IO and restricts transport to WebSocket; Socket.IO therefore uses secure `wss://` from the HTTPS site. No Cloud Run URL or `ws://` URL is hardcoded into application source.

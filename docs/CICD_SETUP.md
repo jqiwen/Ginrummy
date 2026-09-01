@@ -90,7 +90,7 @@ The deployment identity is deliberately not granted Owner, Editor, Cloud Run Adm
 Set these non-secret repository variables under **GitHub -> Repository -> Settings -> Secrets and variables -> Actions -> Variables**. After authenticating `gh`, the equivalent commands are:
 
 ```bash
-gh variable set CLOUD_RUN_GAME_SERVICE_URL --repo jqiwen/Ginrummy --body "https://ginrummy-game-service-rjr3zjal5a-pd.a.run.app"
+gh variable set NEXT_PUBLIC_GAME_WS_URL --repo jqiwen/Ginrummy --body "https://<cloud-run-game-service-url>"
 gh variable set GCP_PROJECT_ID --repo jqiwen/Ginrummy --body "ginrummy-506118"
 gh variable set GCP_REGION --repo jqiwen/Ginrummy --body "northamerica-northeast2"
 gh variable set GCP_ARTIFACT_REPOSITORY --repo jqiwen/Ginrummy --body "cloud-run-source-deploy"
@@ -105,7 +105,7 @@ gh variable set NEXT_PUBLIC_SUPABASE_ANON_KEY --repo jqiwen/Ginrummy --body "<SU
 
 No JSON key, access token, or Google Cloud secret should be added to GitHub.
 
-`CLOUD_RUN_GAME_SERVICE_URL` and `NEXT_PUBLIC_SITE_URL` are used only by the frontend build; the site URL must be `https://ginrummy.jqiwen.com` in production. The two `NEXT_PUBLIC_SUPABASE_*` values are used by both workflows: Pages embeds them in the browser bundle, while Cloud Run maps them to `SUPABASE_URL` and `SUPABASE_ANON_KEY` for verified token lookups. The remaining seven variables are used only by the backend deployment workflow.
+`NEXT_PUBLIC_GAME_WS_URL` and `NEXT_PUBLIC_SITE_URL` are used only by the frontend build. Set the WebSocket variable to the Cloud Run HTTPS service origin and the site URL to `https://ginrummy.jqiwen.com`. The two `NEXT_PUBLIC_SUPABASE_*` values are used by both workflows: Pages embeds them in the browser bundle, while Cloud Run maps them to `SUPABASE_URL` and `SUPABASE_ANON_KEY` for verified token lookups. The remaining seven variables are used only by the backend deployment workflow.
 
 The Supabase anon/publishable key is intentionally public. Never add a service-role key to GitHub or the frontend. Complete the database and Auth configuration in [AUTH_SETUP.md](AUTH_SETUP.md) before deploying.
 
@@ -113,6 +113,6 @@ The Supabase anon/publishable key is intentionally public. Never add a service-r
 
 - `ci.yml` runs frontend and backend verification without deploying.
 - `deploy-game-service.yml` stages a no-traffic revision, checks HTTP and direct WebSocket connectivity, and then assigns 100% traffic to that exact revision.
-- `deploy-pages.yml` does not authenticate with Google Cloud. It injects `CLOUD_RUN_GAME_SERVICE_URL` as `NEXT_PUBLIC_GAME_WS_URL` during the static build and deploys the export to GitHub Pages.
+- `deploy-pages.yml` does not authenticate with Google Cloud. It reads `NEXT_PUBLIC_GAME_WS_URL` directly from GitHub Actions Variables during the static build and deploys the export to GitHub Pages.
 
 Manual backend runs must target `master`, which is also enforced by the WIF provider condition.

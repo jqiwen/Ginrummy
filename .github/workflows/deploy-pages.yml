@@ -36,17 +36,17 @@ jobs:
       - name: Validate frontend deployment configuration
         shell: bash
         env:
-          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$NEXT_PUBLIC_GAME_WS_URL" ]; then
-            echo "Missing required repository variable: CLOUD_RUN_GAME_SERVICE_URL"
+            echo "Missing required GitHub Actions variable: NEXT_PUBLIC_GAME_WS_URL"
             exit 1
           fi
           if [[ "$NEXT_PUBLIC_GAME_WS_URL" != https://* ]]; then
-            echo "CLOUD_RUN_GAME_SERVICE_URL must start with https://"
+            echo "NEXT_PUBLIC_GAME_WS_URL must be the HTTPS Cloud Run service origin"
             exit 1
           fi
           if [ -z "$NEXT_PUBLIC_SITE_URL" ]; then
@@ -77,7 +77,7 @@ jobs:
       - name: Build static frontend
         working-directory: src/frontend
         env:
-          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_GAME_WS_URL: ${{ vars.NEXT_PUBLIC_GAME_WS_URL }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
