@@ -106,7 +106,7 @@ export function registerInviteHandlers(
     try {
       const context = contextFor(socket);
       if (!isRecord(payload) || typeof payload.query !== "string") {
-        throw new ServiceError("PLAYER_NOT_FOUND", "Enter a username to search");
+        throw new ServiceError("PLAYER_NOT_FOUND", "Enter a User ID to search");
       }
       const query = payload.query.trim().toLowerCase();
       if (query.length < 2) {
@@ -145,14 +145,14 @@ export function registerInviteHandlers(
   socket.on("invite:send", async (payload, ack) => {
     try {
       const context = contextFor(socket);
-      if (!isRecord(payload) || typeof payload.recipientUsername !== "string") {
+      if (!isRecord(payload) || typeof payload.recipientPlayerId !== "string") {
         throw new ServiceError("PLAYER_NOT_FOUND", "Choose a registered player");
       }
-      const recipientUsername = payload.recipientUsername.trim().toLowerCase();
-      if (!/^[a-z0-9_]{3,20}$/.test(recipientUsername)) {
+      const recipientPlayerId = payload.recipientPlayerId.trim().toLowerCase();
+      if (!/^[a-z0-9_]{3,20}$/.test(recipientPlayerId)) {
         throw new ServiceError("PLAYER_NOT_FOUND", "Player not found");
       }
-      const recipient = await repository.getProfileByUsername(context, recipientUsername);
+      const recipient = await repository.getProfileByPlayerId(context, recipientPlayerId);
       if (!recipient) throw new ServiceError("PLAYER_NOT_FOUND", "Player not found");
       if (recipient.id === context.userId) {
         throw new ServiceError("CANNOT_INVITE_SELF", "You cannot invite yourself");
@@ -273,6 +273,6 @@ export function registerInviteHandlers(
   });
 }
 
-export function profileForUser(user: { id: string; username: string; displayName: string }): PublicPlayerProfile {
-  return { id: user.id, username: user.username, displayName: user.displayName };
+export function profileForUser(user: { id: string; playerId: string; avatarPath: string | null }): PublicPlayerProfile {
+  return { id: user.id, playerId: user.playerId, avatarPath: user.avatarPath };
 }

@@ -21,7 +21,7 @@ export type InviteTransition = "accept" | "decline" | "cancel";
 
 export interface InviteRepository {
   searchProfiles(context: InviteRequestContext, query: string, limit: number): Promise<PublicPlayerProfile[]>;
-  getProfileByUsername(context: InviteRequestContext, username: string): Promise<PublicPlayerProfile | null>;
+  getProfileByPlayerId(context: InviteRequestContext, playerId: string): Promise<PublicPlayerProfile | null>;
   getProfilesByIds(context: InviteRequestContext, ids: string[]): Promise<Map<string, PublicPlayerProfile>>;
   listInvites(context: InviteRequestContext): Promise<InviteRecord[]>;
   getInvite(context: InviteRequestContext, inviteId: string): Promise<InviteRecord | null>;
@@ -53,8 +53,8 @@ interface DatabaseInviteRow {
 
 interface DatabaseProfileRow {
   id: string;
-  username: string;
-  display_name: string;
+  player_id: string;
+  avatar_path: string | null;
 }
 
 function inviteFromRow(row: DatabaseInviteRow): InviteRecord {
@@ -71,7 +71,7 @@ function inviteFromRow(row: DatabaseInviteRow): InviteRecord {
 }
 
 function profileFromRow(row: DatabaseProfileRow): PublicPlayerProfile {
-  return { id: row.id, username: row.username, displayName: row.display_name };
+  return { id: row.id, playerId: row.player_id, avatarPath: row.avatar_path };
 }
 
 function repositoryError(error: { message?: string; code?: string }): InviteRepositoryError {
@@ -112,23 +112,23 @@ export class SupabaseInviteRepository implements InviteRepository {
     const escaped = query.replace(/[\\%_]/g, "\\$&");
     const { data, error } = await this.client(context)
       .from("profiles")
-      .select("id, username, display_name")
-      .ilike("username", `%${escaped}%`)
+      .select("id, player_id, avatar_path")
+      .ilike("player_id", `%${escaped}%`)
       .neq("id", context.userId)
-      .order("username")
+      .order("player_id")
       .limit(limit);
     if (error) throw repositoryError(error);
     return ((data ?? []) as DatabaseProfileRow[]).map(profileFromRow);
   }
 
-  async getProfileByUsername(
+  async getProfileByPlayerId(
     context: InviteRequestContext,
-    username: string,
+    playerId: string,
   ): Promise<PublicPlayerProfile | null> {
     const { data, error } = await this.client(context)
       .from("profiles")
-      .select("id, username, display_name")
-      .ilike("username", username)
+      .select("id, player_id, avatar_path")
+      .eq("player_id", playerId)
       .maybeSingle();
     if (error) throw repositoryError(error);
     return data ? profileFromRow(data as DatabaseProfileRow) : null;
@@ -142,7 +142,7 @@ export class SupabaseInviteRepository implements InviteRepository {
     if (uniqueIds.length === 0) return new Map();
     const { data, error } = await this.client(context)
       .from("profiles")
-      .select("id, username, display_name")
+      .select("id, player_id, avatar_path")
       .in("id", uniqueIds);
     if (error) throw repositoryError(error);
     return new Map(((data ?? []) as DatabaseProfileRow[]).map((row) => [row.id, profileFromRow(row)]));
@@ -235,14 +235,14 @@ export class InMemoryInviteRepository implements InviteRepository {
   async searchProfiles(context: InviteRequestContext, query: string, limit: number) {
     const normalized = query.toLowerCase();
     return [...this.profiles.values()]
-      .filter((profile) => profile.id !== context.userId && profile.username.toLowerCase().includes(normalized))
-      .sort((left, right) => left.username.localeCompare(right.username))
+      .filter((profile) => profile.id !== context.userId && profile.playerId.toLowerCase().includes(normalized))
+      .sort((left, right) => left.playerId.localeCompare(right.playerId))
       .slice(0, limit);
   }
 
-  async getProfileByUsername(_context: InviteRequestContext, username: string) {
+  async getProfileByPlayerId(_context: InviteRequestContext, playerId: string) {
     return [...this.profiles.values()].find(
-      (profile) => profile.username.toLowerCase() === username.toLowerCase(),
+      (profile) => profile.playerId.toLowerCase() === playerId.toLowerCase(),
     ) ?? null;
   }
 

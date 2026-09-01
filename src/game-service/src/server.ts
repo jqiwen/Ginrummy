@@ -127,10 +127,24 @@ export function createGameService(
         socket.data.matchId = active.matchId;
         socket.data.playerId = active.playerId;
         await socket.join(active.matchId);
+        const room = store.getRoom(active.matchId);
+        const opponentSeat = active.playerId === "1" ? "0" : "1";
+        const opponentUserId = room.players[opponentSeat]?.userId;
+        let opponent = null;
+        if (opponentUserId && socket.data.accessToken) {
+          try {
+            opponent = (await inviteRepository.getProfilesByIds(
+              { userId: user.id, accessToken: socket.data.accessToken },
+              [opponentUserId],
+            )).get(opponentUserId) ?? null;
+          } catch {
+            console.warn("[game-service] could not restore the opponent public profile");
+          }
+        }
         socket.emit("match:ready", {
           inviteId: null,
           membership: { ...active, bot: false },
-          opponent: null,
+          opponent,
         });
       })();
     }

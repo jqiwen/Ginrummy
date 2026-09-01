@@ -38,7 +38,7 @@ jest.mock("@/lib/socket", () => ({
 const activeMatch = {
   inviteId: "invite-1",
   membership: { matchId: "internal-match", playerId: "1", bot: false },
-  opponent: { id: "user-2", username: "opponent", displayName: "Opponent" },
+  opponent: { id: "user-2", playerId: "opponent", avatarPath: null },
 };
 
 function trigger(event: string, payload: unknown) {

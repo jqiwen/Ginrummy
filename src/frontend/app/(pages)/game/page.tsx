@@ -35,15 +35,10 @@ function GameContent() {
   const game = useSelector((state: RootState) => state.game);
   const user = useSelector((state: RootState) => state.user);
 
-  const [userName, setUserName] = useState("");
   const [boardScale, setBoardScale] = useState(1);
   const boardRef = useRef<HTMLDivElement>(null);
   const sidebarOpen = Boolean(game.showSideBar);
   const canRenderGame = isTutorial || (user.status === "authenticated" && Boolean(activeMatch));
-
-  useEffect(() => {
-    setUserName(user.displayName || user.username || "Guest");
-  }, [user.displayName, user.username]);
 
   useEffect(() => {
     if (!isTutorial && user.status === "unauthenticated") {
@@ -160,7 +155,12 @@ function GameContent() {
                 transformOrigin: "center",
               }}
             >
-              <DealCards roomId={roomId} host={host} userName={userName} />
+              <DealCards
+                roomId={roomId}
+                host={host}
+                currentPlayer={{ playerId: user.playerId || "Guest", avatarPath: user.avatarPath }}
+                opponent={isTutorial ? null : activeMatch?.opponent ?? null}
+              />
             </div>
           </div>
         </section>

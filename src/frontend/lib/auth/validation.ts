@@ -11,15 +11,21 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Please enter your password."),
 });
 
+export const playerIdSchema = z
+  .string()
+  .trim()
+  .min(3, "User ID must be between 3 and 20 characters.")
+  .max(20, "User ID must be between 3 and 20 characters.")
+  .regex(/^[A-Za-z0-9_]+$/, "Use only letters, numbers, and underscores.")
+  .transform((value) => value.toLowerCase());
+
+export function normalizePlayerId(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export const signupSchema = z
   .object({
-    username: z
-      .string()
-      .trim()
-      .min(3, "Username must be between 3 and 20 characters.")
-      .max(20, "Username must be between 3 and 20 characters.")
-      .regex(/^[A-Za-z0-9_]+$/, "Use only letters, numbers, and underscores.")
-      .transform((value) => value.toLowerCase()),
+    playerId: playerIdSchema,
     email: normalizedEmail,
     password: z.string().min(8, "Password must be at least 8 characters."),
     confirmPassword: z.string(),

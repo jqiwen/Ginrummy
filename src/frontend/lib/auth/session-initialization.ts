@@ -13,8 +13,8 @@ interface InitializationOptions {
 interface AuthenticatedUserState {
   id: string;
   email: string;
-  username: string;
-  displayName: string;
+  playerId: string;
+  avatarPath: string | null;
 }
 
 let profileInitialization: {
@@ -34,14 +34,15 @@ function loadAuthenticatedUser(session: Session): Promise<AuthenticatedUserState
 
   const promise = loadProfile(session.user.id).then((profile) => {
     const metadata = session.user.user_metadata;
-    const fallbackUsername = metadataString(metadata.username)
+    const fallbackPlayerId = metadataString(metadata.player_id)
+      ?? metadataString(metadata.username)
       ?? session.user.email?.split("@")[0]
       ?? "player";
     return {
       id: session.user.id,
       email: session.user.email ?? "",
-      username: profile?.username ?? fallbackUsername,
-      displayName: profile?.displayName ?? metadataString(metadata.display_name) ?? fallbackUsername,
+      playerId: profile?.playerId ?? fallbackPlayerId,
+      avatarPath: profile?.avatarPath ?? null,
     };
   });
   profileInitialization = { userId: session.user.id, promise };

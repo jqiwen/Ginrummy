@@ -14,7 +14,7 @@ jest.mock("next/navigation", () => ({
 jest.mock("react-redux", () => ({
   useDispatch: () => dispatch,
   useSelector: (selector: (state: unknown) => unknown) => selector({
-    user: { id: "user-1", email: "player@example.com", username: "player", displayName: "Player", status: "authenticated" },
+    user: { id: "user-1", email: "player@example.com", playerId: "player", avatarPath: null, status: "authenticated" },
     game: { showSideBar: null },
   }),
 }));

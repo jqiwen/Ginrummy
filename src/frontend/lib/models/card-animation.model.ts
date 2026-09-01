@@ -24,9 +24,10 @@ export interface ChatBubbleProps {
   bgColor: string; 
 }
 export interface AvatarDisplayProps {
-  image: string;
+  avatarPath?: string | null;
+  imageUrl?: string | null;
   player: 1 | 2;
-  name: string;
+  playerId: string;
   p2Playing: playingStatus;
   p1Playing: playingStatus;
   currentPass: passingStatus;

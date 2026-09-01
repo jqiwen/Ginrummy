@@ -14,18 +14,21 @@ Open the dashboard and follow this exact path:
 
 **Supabase → Ginrummy project → SQL Editor → New query → paste the complete migration → Run**
 
-Run the complete contents of both files in this order:
+Run the complete contents of these files in order:
 
 ```text
 supabase/migrations/202608310001_create_profiles.sql
 supabase/migrations/202608310002_create_game_invites.sql
+supabase/migrations/202609010001_player_id_avatars.sql
 ```
 
 Alternatively, link the repository with the Supabase CLI and run `supabase db push`. The migrations create:
 
 - `public.profiles`, keyed by the UUID from `auth.users`
-- database-enforced, case-normalized unique usernames
-- row-level security for public profile reads and owner-only updates
+- database-enforced, lowercase unique and immutable public User IDs (`player_id`)
+- optional public avatar paths with owner-only profile updates
+- a public `avatars` Storage bucket with authenticated owner-folder writes
+- row-level security for public profile reads and avatar-only owner updates
 - a trigger that creates a profile from signup metadata
 - an `updated_at` trigger
 - persistent `public.game_invites` rows with a 30-minute expiration
@@ -33,9 +36,9 @@ Alternatively, link the repository with the Supabase CLI and run `supabase db pu
 - narrow authenticated functions for send, accept, decline, cancel, and lazy expiration
 - a partial unique index that prevents duplicate pending invitations between the same two players
 
-The trigger intentionally rejects invalid or duplicate usernames at the database boundary. If it fails, Supabase rejects the related signup instead of creating an auth user without a profile.
+The trigger intentionally rejects invalid or duplicate User IDs at the database boundary. If it fails, Supabase rejects the related signup instead of creating an auth user without a profile. `profiles.id` remains the private Supabase Auth UUID; `profiles.player_id` is the public identity.
 
-Until this migration is applied, the signup username check returns `404` for `public.profiles` and `auth.signUp()` is not called. This is expected fail-fast behavior: apply the migration instead of bypassing the profile check.
+Until these migrations are applied, the signup User ID check fails and `auth.signUp()` is not called. Apply the migrations instead of bypassing the profile check. Existing projects that already ran the first two files only need to run `202609010001_player_id_avatars.sql`.
 
 ## 3. Enable Email/Password authentication
 
@@ -106,7 +109,7 @@ The Pages workflow compiles these into the static browser bundle. `NEXT_PUBLIC_S
 
 ## 7. Deploy in order
 
-1. Apply both SQL migrations in filename order.
+1. Apply all SQL migrations in filename order.
 2. Configure Email/Password and the URL allowlist.
 3. Add the three frontend repository variables.
 4. Run **Deploy game service to Cloud Run** so the service can verify access tokens.
@@ -116,12 +119,13 @@ The existing Cloud Run deployment command supplies the backend environment value
 
 ## 8. Verify the live flow
 
-1. Register a new username and email.
+1. Register a new User ID and email.
 2. If confirmation is enabled, follow the email link and sign in.
-3. Confirm the header shows the profile display name after a refresh.
-4. Open Private Match, search for the second account by username, and send an invite.
-5. Sign in as that second user in a separate browser profile, accept the invite, and confirm both sessions enter the same match automatically.
-6. Refresh one match session and confirm its authenticated seat reconnects without entering a room code.
-7. Sign out and confirm Private Match redirects back to login while the guest tutorial remains available.
+3. Confirm the header shows the User ID and avatar fallback after a refresh.
+4. Upload a JPG, PNG, or WebP avatar smaller than 2 MB and confirm it appears immediately.
+5. Open Private Match, search for the second account by User ID, and send an invite.
+6. Sign in as that second user in a separate browser profile, accept the invite, and confirm both sessions enter the same match with both avatars.
+7. Refresh one match session and confirm its authenticated seat, User ID, and opponent avatar reconnect without entering a room code.
+8. Sign out and confirm Private Match redirects back to login while the guest tutorial remains available.
 
 If signup fails with a generic account error, check Supabase Auth logs and confirm the migration ran successfully. A missing `profiles` table or profile trigger will deliberately prevent an incomplete account from being used.

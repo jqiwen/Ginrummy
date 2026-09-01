@@ -36,7 +36,7 @@ interface InvitationContextValue {
   error: string | null;
   refreshInvites: () => Promise<void>;
   searchPlayers: (query: string) => Promise<PublicPlayerProfile[]>;
-  sendInvite: (username: string) => Promise<void>;
+  sendInvite: (playerId: string) => Promise<void>;
   acceptInvite: (inviteId: string) => Promise<void>;
   declineInvite: (inviteId: string) => Promise<void>;
   cancelInvite: (inviteId: string) => Promise<void>;
@@ -49,7 +49,7 @@ function messageFor(response: SocketResponse<unknown>): string {
   if (typeof response.code === "string") {
     const messages: Record<string, string> = {
       AUTH_REQUIRED: "Log in to use private matches.",
-      PLAYER_NOT_FOUND: "No registered player has that username.",
+      PLAYER_NOT_FOUND: "No registered player has that User ID.",
       CANNOT_INVITE_SELF: "You cannot invite yourself.",
       INVITE_ALREADY_PENDING: "An invitation between these players is already pending.",
       INVITE_RATE_LIMITED: "Please wait before sending another invitation.",
@@ -248,11 +248,11 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
     return requireData(response);
   }, []);
 
-  const sendInvite = useCallback(async (username: string) => {
+  const sendInvite = useCallback(async (playerId: string) => {
     setError(null);
     const socket = await waitForGameSocket();
     const response = await new Promise<SocketResponse<GameInvite>>((resolve) => {
-      socket.emit("invite:send", { recipientUsername: username }, resolve);
+      socket.emit("invite:send", { recipientPlayerId: playerId.trim().toLowerCase() }, resolve);
     });
     const invite = requireData(response);
     setLists((current) => ({

@@ -5,16 +5,16 @@ export type AuthenticationStatus = "authenticated" | "initializing" | "unauthent
 export interface UserState {
   id: string | null;
   email: string;
-  username: string;
-  displayName: string;
+  playerId: string;
+  avatarPath: string | null;
   status: AuthenticationStatus;
 }
 
 const initialState: UserState = {
   id: null,
   email: "",
-  username: "",
-  displayName: "",
+  playerId: "",
+  avatarPath: null,
   status: "initializing",
 };
 
@@ -24,8 +24,11 @@ const userSlice = createSlice({
   reducers: {
     setAuthenticatedUser: (
       state,
-      action: PayloadAction<Pick<UserState, "displayName" | "email" | "id" | "username">>,
+      action: PayloadAction<Pick<UserState, "avatarPath" | "email" | "id" | "playerId">>,
     ) => ({ ...action.payload, status: "authenticated" }),
+    setAvatarPath: (state, action: PayloadAction<string | null>) => {
+      state.avatarPath = action.payload;
+    },
     setAuthInitializing: (state) => {
       state.status = "initializing";
     },
@@ -33,5 +36,5 @@ const userSlice = createSlice({
   },
 });
 
-export const { setAuthenticatedUser, setAuthInitializing, setUnauthenticated } = userSlice.actions;
+export const { setAuthenticatedUser, setAuthInitializing, setAvatarPath, setUnauthenticated } = userSlice.actions;
 export default userSlice.reducer;

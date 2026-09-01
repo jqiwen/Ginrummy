@@ -18,7 +18,7 @@ const session = {
   user: {
     id: "user-1",
     email: "player@example.com",
-    user_metadata: { username: "player", display_name: "Player" },
+    user_metadata: { player_id: "player" },
   },
 } as unknown as Session;
 
@@ -26,7 +26,7 @@ describe("authenticated session initialization", () => {
   beforeEach(() => {
     clearAuthenticatedSession(jest.fn());
     jest.clearAllMocks();
-    mockedLoadProfile.mockResolvedValue({ id: "user-1", username: "player", displayName: "Player" });
+    mockedLoadProfile.mockResolvedValue({ id: "user-1", playerId: "player", avatarPath: "user-1/avatar.png" });
     mockedWaitForSocket.mockResolvedValue({} as never);
   });
 
@@ -37,7 +37,7 @@ describe("authenticated session initialization", () => {
     expect(mockedSetToken).toHaveBeenCalledWith("fresh-access-token", true);
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: "user/setAuthenticatedUser",
-      payload: expect.objectContaining({ id: "user-1", username: "player" }),
+      payload: expect.objectContaining({ id: "user-1", playerId: "player", avatarPath: "user-1/avatar.png" }),
     }));
     expect(mockedWaitForSocket).toHaveBeenCalledTimes(1);
   });

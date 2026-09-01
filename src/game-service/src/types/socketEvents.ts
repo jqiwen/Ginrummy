@@ -12,8 +12,8 @@ export type Ack<T = never> = (response: SocketResponse<T>) => void;
 export interface AuthenticatedSocketUser {
   id: string;
   email: string;
-  username: string;
-  displayName: string;
+  playerId: string;
+  avatarPath: string | null;
 }
 
 export interface CreateRoomPayload {
@@ -51,8 +51,8 @@ export type InviteErrorCode =
 
 export interface PublicPlayerProfile {
   id: string;
-  username: string;
-  displayName: string;
+  playerId: string;
+  avatarPath: string | null;
 }
 
 export interface GameInvite {
@@ -145,7 +145,7 @@ export interface ClientToServerEvents {
   "round:ready-next": (payload: RoundPayload, ack: Ack) => void;
   "player:search": (payload: { query: string }, ack: Ack<PublicPlayerProfile[]>) => void;
   "invite:list": (payload: Record<string, never>, ack: Ack<InviteLists>) => void;
-  "invite:send": (payload: { recipientUsername: string }, ack: Ack<GameInvite>) => void;
+  "invite:send": (payload: { recipientPlayerId: string }, ack: Ack<GameInvite>) => void;
   "invite:accept": (payload: { inviteId: string }, ack: Ack<InviteMatchReady>) => void;
   "invite:decline": (payload: { inviteId: string }, ack: Ack<GameInvite>) => void;
   "invite:cancel": (payload: { inviteId: string }, ack: Ack<GameInvite>) => void;

@@ -17,18 +17,18 @@ export class SupabaseTokenVerifier implements TokenVerifier {
 
     const { data: profile, error: profileError } = await this.supabase
       .from("profiles")
-      .select("username, display_name")
+      .select("player_id, avatar_path")
       .eq("id", user.id)
       .single();
-    if (profileError || !profile || typeof profile.username !== "string") {
+    if (profileError || !profile || typeof profile.player_id !== "string") {
       throw new Error("Authenticated profile not found");
     }
 
     return {
       id: user.id,
       email: user.email,
-      username: profile.username,
-      displayName: typeof profile.display_name === "string" ? profile.display_name : profile.username,
+      playerId: profile.player_id,
+      avatarPath: typeof profile.avatar_path === "string" ? profile.avatar_path : null,
     };
   }
 }

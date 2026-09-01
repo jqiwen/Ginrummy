@@ -33,9 +33,9 @@ function emitAck<T>(socket: Socket, event: string, payload: object): Promise<Res
 }
 
 const users: Record<string, AuthenticatedSocketUser> = {
-  "host-token": { id: "host-user", email: "host@example.com", username: "host", displayName: "Host" },
-  "guest-token": { id: "guest-user", email: "guest@example.com", username: "guest", displayName: "Guest" },
-  "intruder-token": { id: "intruder-user", email: "intruder@example.com", username: "intruder", displayName: "Intruder" },
+  "host-token": { id: "host-user", email: "host@example.com", playerId: "host", avatarPath: "host-user/avatar.webp" },
+  "guest-token": { id: "guest-user", email: "guest@example.com", playerId: "guest", avatarPath: null },
+  "intruder-token": { id: "intruder-user", email: "intruder@example.com", playerId: "intruder", avatarPath: null },
 };
 
 const tokenVerifier: TokenVerifier = {
@@ -69,7 +69,7 @@ describe("Socket.IO game flow", () => {
   beforeEach(async () => {
     store = new GameStore();
     const inviteRepository = new InMemoryInviteRepository(
-      Object.values(users).map(({ id, username, displayName }) => ({ id, username, displayName })),
+      Object.values(users).map(({ id, playerId, avatarPath }) => ({ id, playerId, avatarPath })),
     );
     service = createGameService(store, "https://ginrummy.jqiwen.com", tokenVerifier, inviteRepository);
     await new Promise<void>((resolve) => service.httpServer.listen(0, "127.0.0.1", resolve));

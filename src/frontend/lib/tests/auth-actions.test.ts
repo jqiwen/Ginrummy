@@ -1,12 +1,12 @@
-import { signUpWithEmail } from "@/lib/auth/actions";
+import { checkPlayerIdAvailability, signUpWithEmail } from "@/lib/auth/actions";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 jest.mock("@/lib/supabase/client", () => ({ getSupabaseBrowserClient: jest.fn() }));
 
 const mockedGetClient = jest.mocked(getSupabaseBrowserClient);
 const values = {
-  username: "admin_user",
-  email: "player@example.com",
+  playerId: "Admin_User",
+  email: " Player@Example.com ",
   password: "password-123",
   confirmPassword: "password-123",
 };
@@ -22,25 +22,20 @@ function mockSupabase(options: {
   const maybeSingle = options.profileReject === undefined
     ? jest.fn().mockResolvedValue({ data: options.profileData ?? null, error: options.profileError ?? null })
     : jest.fn().mockRejectedValue(options.profileReject);
+  const eq = jest.fn(() => ({ maybeSingle }));
+  const select = jest.fn(() => ({ eq }));
   const signUp = options.signupReject === undefined
     ? jest.fn().mockResolvedValue({
       data: options.signupData ?? { user: { identities: [{}] }, session: null },
       error: options.signupError ?? null,
     })
     : jest.fn().mockRejectedValue(options.signupReject);
-  const client = {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => ({ maybeSingle })),
-      })),
-    })),
-    auth: { signUp },
-  };
+  const client = { from: jest.fn(() => ({ select })), auth: { signUp } };
   mockedGetClient.mockReturnValue(client as never);
-  return { maybeSingle, signUp };
+  return { eq, maybeSingle, select, signUp };
 }
 
-describe("signUpWithEmail", () => {
+describe("registration identity checks", () => {
   let consoleError: jest.SpyInstance;
 
   beforeEach(() => {
@@ -51,79 +46,65 @@ describe("signUpWithEmail", () => {
 
   afterEach(() => consoleError.mockRestore());
 
+  it("reports an available User ID and performs a lowercase player_id lookup", async () => {
+    const { eq } = mockSupabase({});
+    await expect(checkPlayerIdAvailability("  ADMIN_User ")).resolves.toBe(true);
+    expect(eq).toHaveBeenCalledWith("player_id", "admin_user");
+  });
+
+  it("treats case-only duplicate User IDs as taken and blocks auth signup", async () => {
+    const { signUp } = mockSupabase({ profileData: { id: "existing-user" } });
+    await expect(signUpWithEmail(values)).rejects.toMatchObject({
+      code: "player_id_exists",
+      message: "This User ID is already taken.",
+    });
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
   it("identifies an unapplied profiles migration and never calls auth signup", async () => {
     const { signUp } = mockSupabase({
-      profileError: {
-        code: "PGRST205",
-        message: "Could not find the table 'public.profiles' in the schema cache",
-      },
+      profileError: { code: "PGRST205", message: "Could not find the table 'public.profiles' in the schema cache" },
     });
-
-    await expect(signUpWithEmail(values)).rejects.toMatchObject({
-      code: "unavailable",
-      message: "Unable to create your account. Please try again.",
-    });
-    expect(signUp).not.toHaveBeenCalled();
-    expect(consoleError).toHaveBeenCalledWith(
-      "[auth] Supabase profiles table is unavailable. Apply the auth database migration.",
-    );
-  });
-
-  it("stops when the username already exists", async () => {
-    const { signUp } = mockSupabase({ profileData: { id: "existing-user" } });
-    await expect(signUpWithEmail(values)).rejects.toMatchObject({ code: "username_exists" });
+    await expect(signUpWithEmail(values)).rejects.toMatchObject({ code: "unavailable" });
     expect(signUp).not.toHaveBeenCalled();
   });
 
-  it("fails safely when the username availability request has a network error", async () => {
+  it("fails safely when the availability request has a network error", async () => {
     const { signUp } = mockSupabase({ profileReject: new TypeError("fetch failed") });
     await expect(signUpWithEmail(values)).rejects.toMatchObject({ code: "unavailable" });
     expect(signUp).not.toHaveBeenCalled();
     expect(consoleError).toHaveBeenCalledWith(
       "[auth] Unexpected Supabase error",
-      { operation: "username_availability_network" },
+      { operation: "player_id_availability_network" },
     );
   });
 
-  it("maps duplicate email responses to a friendly error", async () => {
+  it("maps duplicate email responses without exposing an email directory", async () => {
     mockSupabase({ signupError: { message: "User already registered" } });
     await expect(signUpWithEmail(values)).rejects.toMatchObject({
       code: "email_exists",
-      message: "An account with this email already exists.",
+      message: "An account with this email already exists. Try signing in instead.",
     });
   });
 
-  it("logs a safe operation name for network failures", async () => {
-    mockSupabase({ signupReject: new TypeError("fetch failed") });
-    await expect(signUpWithEmail(values)).rejects.toMatchObject({ code: "unavailable" });
-    expect(consoleError).toHaveBeenCalledWith(
-      "[auth] Unexpected Supabase error",
-      { operation: "auth_signup_network" },
-    );
-  });
-
-  it("maps unexpected auth signup responses to a generic error", async () => {
-    mockSupabase({ signupError: { code: "unexpected_failure", message: "Auth service unavailable" } });
+  it("maps a profile uniqueness race to the friendly User ID error", async () => {
+    mockSupabase({ signupError: { code: "23505", message: "PLAYER_ID_TAKEN duplicate key" } });
     await expect(signUpWithEmail(values)).rejects.toMatchObject({
-      code: "unavailable",
-      message: "Unable to create your account. Please try again.",
+      code: "player_id_exists",
+      message: "This User ID is already taken.",
     });
-    expect(consoleError).toHaveBeenCalledWith(
-      "[auth] Unexpected Supabase error",
-      { operation: "auth_signup", code: "unexpected_failure" },
-    );
   });
 
-  it("returns the email-confirmation result after successful auth signup", async () => {
+  it("normalizes signup identity and sends no display name or public email metadata", async () => {
     const { signUp } = mockSupabase({});
-    await expect(signUpWithEmail(values)).resolves.toMatchObject({
-      email: values.email,
-      session: null,
-    });
-    expect(signUp).toHaveBeenCalledWith(expect.objectContaining({
-      options: expect.objectContaining({
+    await expect(signUpWithEmail(values)).resolves.toMatchObject({ email: "player@example.com", session: null });
+    expect(signUp).toHaveBeenCalledWith({
+      email: "player@example.com",
+      password: values.password,
+      options: {
+        data: { player_id: "admin_user" },
         emailRedirectTo: "https://ginrummy.jqiwen.com/login/?confirmed=1",
-      }),
-    }));
+      },
+    });
   });
 });

@@ -25,7 +25,7 @@ npm test
 
 ## Flow
 
-1. An authenticated player searches public profiles by username and sends a persistent invite.
+1. An authenticated player searches public profiles by public User ID and sends a persistent invite.
 2. The recipient accepts; Supabase atomically marks the invite accepted and generates the internal room UUID.
 3. The service binds both verified user UUIDs to seats, joins their active sockets, and emits `match:ready`.
 4. The dealer sends `round:start`; the service deals one player-specific state payload to each socket.

@@ -4,27 +4,62 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { getAuthErrorMessage, signUpWithEmail } from "@/lib/auth/actions";
-import { type SignupFormValues, signupSchema } from "@/lib/auth/validation";
+import { AuthUiError, checkPlayerIdAvailability, getAuthErrorMessage, signUpWithEmail } from "@/lib/auth/actions";
+import { normalizePlayerId, playerIdSchema, type SignupFormValues, signupSchema } from "@/lib/auth/validation";
 
 const inputClass = "h-11 border-[#aa9159]/35 bg-[#06110d]/70 text-[#fff7df] placeholder:text-[#d8d1bf]/35 focus-visible:ring-[#d2b66e]";
+type AvailabilityState = "empty" | "typing" | "checking" | "available" | "taken" | "unavailable";
 
 export function SignUpForm() {
   const router = useRouter();
   const submissionPending = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<AvailabilityState>("empty");
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { username: "", email: "", password: "", confirmPassword: "" },
+    defaultValues: { playerId: "", email: "", password: "", confirmPassword: "" },
   });
+  const playerIdValue = form.watch("playerId");
+
+  useEffect(() => {
+    const normalized = normalizePlayerId(playerIdValue);
+    if (!normalized) {
+      setAvailability("empty");
+      return;
+    }
+    if (!playerIdSchema.safeParse(normalized).success) {
+      setAvailability("typing");
+      return;
+    }
+
+    let active = true;
+    setAvailability("typing");
+    const timer = window.setTimeout(async () => {
+      setAvailability("checking");
+      try {
+        const available = await checkPlayerIdAvailability(normalized);
+        if (!active) return;
+        setAvailability(available ? "available" : "taken");
+        if (available) form.clearErrors("playerId");
+        else form.setError("playerId", { type: "manual", message: "This User ID is already taken." });
+      } catch {
+        if (active) setAvailability("unavailable");
+      }
+    }, 400);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [form, playerIdValue]);
 
   async function onSubmit(rawValues: SignupFormValues) {
     if (submissionPending.current) return;
@@ -38,7 +73,15 @@ export function SignUpForm() {
         setConfirmationEmail(result.email);
       }
     } catch (caught) {
-      setError(getAuthErrorMessage(caught, "Unable to create your account. Please try again."));
+      const message = getAuthErrorMessage(caught, "Unable to create your account. Please try again.");
+      if (caught instanceof AuthUiError && caught.code === "player_id_exists") {
+        setAvailability("taken");
+        form.setError("playerId", { type: "server", message });
+      } else if (caught instanceof AuthUiError && caught.code === "email_exists") {
+        form.setError("email", { type: "server", message });
+      } else {
+        setError(message);
+      }
     } finally {
       submissionPending.current = false;
     }
@@ -58,11 +101,18 @@ export function SignUpForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-        <FormField control={form.control} name="username" render={({ field }) => (
+        <FormField control={form.control} name="playerId" render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-[#eee4cb]">Username</FormLabel>
-            <FormControl><Input autoComplete="username" placeholder="table_player" className={inputClass} {...field} /></FormControl>
-            <FormDescription className="text-[#d8d1bf]/50">3–20 letters, numbers, or underscores.</FormDescription>
+            <FormLabel className="text-[#eee4cb]">User ID</FormLabel>
+            <FormControl><Input autoComplete="username" placeholder="kyra123" className={inputClass} aria-describedby="player-id-help player-id-availability" {...field} /></FormControl>
+            <FormDescription id="player-id-help" className="rounded-sm border-l-2 border-[#c6a354]/60 bg-[#c6a354]/8 px-3 py-2 text-[#e5d4a4]/75">
+              3–20 letters, numbers, or underscores. Your User ID is unique and cannot be changed later.
+            </FormDescription>
+            <div id="player-id-availability" aria-live="polite" className="min-h-4 text-xs">
+              {availability === "checking" && <span className="inline-flex items-center text-[#d8d1bf]/60"><LoaderCircle className="mr-1.5 h-3 w-3 animate-spin" />Checking…</span>}
+              {availability === "available" && <span className="text-emerald-200/80">User ID is available.</span>}
+              {availability === "unavailable" && <span className="text-[#d8d1bf]/55">Availability could not be checked yet.</span>}
+            </div>
             <FormMessage className="text-[#ffb4a7]" />
           </FormItem>
         )} />

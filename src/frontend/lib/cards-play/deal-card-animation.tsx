@@ -32,11 +32,12 @@ import {
   type GameOperationEvent,
   type PassStatusEvent,
   type PlayerId,
+  type PublicPlayerProfile,
   type RoundResultEvent,
   waitForGameSocket,
 } from '../socket';
 
-export default function DealCards({ roomId, host, userName}: { roomId: string; host: string; userName: string}) {
+export default function DealCards({ roomId, host, currentPlayer, opponent}: { roomId: string; host: string; currentPlayer: Pick<PublicPlayerProfile, "playerId" | "avatarPath">; opponent: PublicPlayerProfile | null}) {
   const [dealing, setDealing] = useState(false);
   const [currentPass, setCurrentPass] = useState<passingStatus>(null)
 
@@ -588,7 +589,7 @@ useEffect(() => {
       <div className="h-full w-full flex flex-col items-center justify-center select-none">
 
         {/* Player1 avatar*/}
-        <AvatarDisplay image={publicAssetPath('/main-image/avatar-robot.jpg')} player={1} name={roomId == 'tutorial' ? 'Robot' : host == '1' ? 'Player 2' : 'Player 1'} p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
+        <AvatarDisplay imageUrl={roomId == 'tutorial' ? publicAssetPath('/main-image/avatar-robot.jpg') : null} avatarPath={roomId == 'tutorial' ? null : opponent?.avatarPath} player={1} playerId={roomId == 'tutorial' ? 'Robot' : opponent?.playerId ?? 'Opponent'} p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
 
         <div className="relative flex items-center justify-center w-full h-[500px] gap-4">
             {/* Player1 */}
@@ -827,7 +828,7 @@ useEffect(() => {
           )}
 
 
-          <AvatarDisplay image={publicAssetPath('/main-image/avatar-user.jpg')} player={2} name={roomId == 'tutorial' ? userName : host == '1' ? 'Player 1' : 'Player 2'}  p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
+          <AvatarDisplay avatarPath={currentPlayer.avatarPath} player={2} playerId={currentPlayer.playerId} p2Playing={p2Playing} p1Playing={p1Playing} currentPass={currentPass}/>
 
           {p2Playing == 'passOrPick' && (
             <div

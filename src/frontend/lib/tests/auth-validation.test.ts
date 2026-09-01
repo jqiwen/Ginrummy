@@ -5,9 +5,9 @@ describe("authentication validation", () => {
     expect(loginSchema.safeParse({ email: "not-an-email", password: "password" }).success).toBe(false);
   });
 
-  it("rejects invalid usernames", () => {
+  it("rejects invalid User IDs", () => {
     const result = signupSchema.safeParse({
-      username: "bad name",
+      playerId: "bad name",
       email: "player@example.com",
       password: "password",
       confirmPassword: "password",
@@ -17,7 +17,7 @@ describe("authentication validation", () => {
 
   it("rejects a short password", () => {
     const result = signupSchema.safeParse({
-      username: "player_one",
+      playerId: "player_one",
       email: "player@example.com",
       password: "short",
       confirmPassword: "short",
@@ -27,7 +27,7 @@ describe("authentication validation", () => {
 
   it("rejects passwords that do not match", () => {
     const result = signupSchema.safeParse({
-      username: "player_one",
+      playerId: "player_one",
       email: "player@example.com",
       password: "password-one",
       confirmPassword: "password-two",
@@ -35,12 +35,12 @@ describe("authentication validation", () => {
     expect(result.success).toBe(false);
   });
 
-  it("normalizes email and username", () => {
+  it("normalizes email and User ID", () => {
     expect(signupSchema.parse({
-      username: " Player_One ",
+      playerId: " Player_One ",
       email: " PLAYER@EXAMPLE.COM ",
       password: "password",
       confirmPassword: "password",
-    })).toMatchObject({ username: "player_one", email: "player@example.com" });
+    })).toMatchObject({ playerId: "player_one", email: "player@example.com" });
   });
 });

@@ -30,15 +30,15 @@ function emitAck<T>(socket: Socket, event: string, payload: object): Promise<Res
 }
 
 const users: Record<string, AuthenticatedSocketUser> = {
-  "host-token": { id: "host-user", email: "host@example.com", username: "hostplayer", displayName: "Host" },
-  "guest-token": { id: "guest-user", email: "guest@example.com", username: "guestplayer", displayName: "Guest" },
-  "intruder-token": { id: "intruder-user", email: "intruder@example.com", username: "intruder", displayName: "Intruder" },
+  "host-token": { id: "host-user", email: "host@example.com", playerId: "hostplayer", avatarPath: "host-user/avatar.webp" },
+  "guest-token": { id: "guest-user", email: "guest@example.com", playerId: "guestplayer", avatarPath: "guest-user/avatar.png" },
+  "intruder-token": { id: "intruder-user", email: "intruder@example.com", playerId: "intruder", avatarPath: null },
 };
 
-const profiles: PublicPlayerProfile[] = Object.values(users).map(({ id, username, displayName }) => ({
+const profiles: PublicPlayerProfile[] = Object.values(users).map(({ id, playerId, avatarPath }) => ({
   id,
-  username,
-  displayName,
+  playerId,
+  avatarPath,
 }));
 
 const verifier: TokenVerifier = {
@@ -90,35 +90,35 @@ describe("registered-player invitations", () => {
 
   it("rejects unauthenticated invite actions", async () => {
     const anonymous = await connect();
-    const response = await emitAck(anonymous, "invite:send", { recipientUsername: "guestplayer" });
+    const response = await emitAck(anonymous, "invite:send", { recipientPlayerId: "guestplayer" });
     expect(response).toMatchObject({ success: false, code: "AUTH_REQUIRED" });
   });
 
-  it("searches registered usernames without emails and excludes the current user", async () => {
+  it("searches public User IDs with avatars, without emails, and excludes the current user", async () => {
     const response = await emitAck<PublicPlayerProfile[]>(host, "player:search", { query: "player" });
     expect(response.success).toBe(true);
     expect(response.data).toEqual([
-      { id: "guest-user", username: "guestplayer", displayName: "Guest" },
+      { id: "guest-user", playerId: "guestplayer", avatarPath: "guest-user/avatar.png" },
     ]);
     expect(JSON.stringify(response.data)).not.toContain("@");
   });
 
   it("rejects nonexistent players, self-invites, and duplicate pending invites", async () => {
-    await expect(emitAck(host, "invite:send", { recipientUsername: "missing" }))
+    await expect(emitAck(host, "invite:send", { recipientPlayerId: "missing" }))
       .resolves.toMatchObject({ success: false, code: "PLAYER_NOT_FOUND" });
-    await expect(emitAck(host, "invite:send", { recipientUsername: "hostplayer" }))
+    await expect(emitAck(host, "invite:send", { recipientPlayerId: "hostplayer" }))
       .resolves.toMatchObject({ success: false, code: "CANNOT_INVITE_SELF" });
 
     const received = once<GameInvite>(guest, "invite:received");
-    const first = await emitAck<GameInvite>(host, "invite:send", { recipientUsername: "guestplayer" });
+    const first = await emitAck<GameInvite>(host, "invite:send", { recipientPlayerId: "guestplayer" });
     expect(first.success).toBe(true);
-    await expect(received).resolves.toMatchObject({ sender: { username: "hostplayer" } });
-    await expect(emitAck(host, "invite:send", { recipientUsername: "guestplayer" }))
+    await expect(received).resolves.toMatchObject({ sender: { playerId: "hostplayer", avatarPath: "host-user/avatar.webp" } });
+    await expect(emitAck(host, "invite:send", { recipientPlayerId: "guestplayer" }))
       .resolves.toMatchObject({ success: false, code: "INVITE_ALREADY_PENDING" });
   });
 
   it("prevents the wrong user accepting and allows recipients to decline", async () => {
-    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientUsername: "guestplayer" });
+    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientPlayerId: "guestplayer" });
     const inviteId = sent.data!.id;
     const intruder = await connect("intruder-token");
     await expect(emitAck(intruder, "invite:accept", { inviteId }))
@@ -131,7 +131,7 @@ describe("registered-player invitations", () => {
   });
 
   it("allows only the sender to cancel a pending invitation", async () => {
-    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientUsername: "guestplayer" });
+    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientPlayerId: "guestplayer" });
     const inviteId = sent.data!.id;
     await expect(emitAck(guest, "invite:cancel", { inviteId }))
       .resolves.toMatchObject({ success: false, code: "INVITE_FORBIDDEN" });
@@ -142,7 +142,7 @@ describe("registered-player invitations", () => {
   });
 
   it("accepts once, creates one internal room, seats both users, and restores a refreshed player", async () => {
-    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientUsername: "guestplayer" });
+    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientPlayerId: "guestplayer" });
     const inviteId = sent.data!.id;
     const hostReady = once<InviteMatchReady>(host, "match:ready");
     const acceptedForSender = once<InviteMatchReady>(host, "invite:accepted");
@@ -178,13 +178,13 @@ describe("registered-player invitations", () => {
 
   it("persists an offline invite and returns it when the recipient reconnects", async () => {
     guest.disconnect();
-    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientUsername: "guestplayer" });
+    const sent = await emitAck<GameInvite>(host, "invite:send", { recipientPlayerId: "guestplayer" });
     expect(sent.success).toBe(true);
 
     const returningGuest = await connect("guest-token");
     const loaded = await emitAck<InviteLists>(returningGuest, "invite:list", {});
     expect(loaded.data?.received).toHaveLength(1);
-    expect(loaded.data?.received[0]).toMatchObject({ id: sent.data?.id, sender: { username: "hostplayer" } });
+    expect(loaded.data?.received[0]).toMatchObject({ id: sent.data?.id, sender: { playerId: "hostplayer" } });
   });
 
   it("does not accept expired invitations", async () => {

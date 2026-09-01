@@ -15,8 +15,8 @@ let authStatus = "authenticated";
 const invitationState = {
   received: [{
     id: "invite-1",
-    sender: { id: "sender", username: "kyra123", displayName: "Kyra" },
-    recipient: { id: "me", username: "player", displayName: "Player" },
+    sender: { id: "sender", playerId: "kyra123", avatarPath: "sender/avatar.webp" },
+    recipient: { id: "me", playerId: "player", avatarPath: null },
     status: "pending" as const,
     createdAt: "2026-09-01T00:00:00.000Z",
     updatedAt: "2026-09-01T00:00:00.000Z",
@@ -49,7 +49,7 @@ describe("Private Match", () => {
     jest.clearAllMocks();
     authStatus = "authenticated";
     searchPlayers.mockResolvedValue([
-      { id: "guest", username: "guestplayer", displayName: "Guest Player" },
+      { id: "guest", playerId: "guestplayer", avatarPath: null },
     ]);
     sendInvite.mockResolvedValue(undefined);
     acceptInvite.mockResolvedValue(undefined);
@@ -70,15 +70,16 @@ describe("Private Match", () => {
       .toHaveAttribute("href", "/login?next=%2Fpvp");
   });
 
-  it("debounces public username search and never renders an email", async () => {
+  it("debounces public User ID search, renders one identity, and never renders an email", async () => {
     jest.useFakeTimers();
     render(<PvpPage />);
-    fireEvent.change(screen.getByLabelText("Search by username"), { target: { value: "gu" } });
+    fireEvent.change(screen.getByLabelText("Search by User ID"), { target: { value: "gu" } });
     expect(searchPlayers).not.toHaveBeenCalled();
     await act(async () => { jest.advanceTimersByTime(300); });
     await waitFor(() => expect(searchPlayers).toHaveBeenCalledWith("gu"));
     expect(await screen.findByText("guestplayer")).toBeInTheDocument();
-    expect(screen.getByText("Guest Player")).toBeInTheDocument();
+    expect(screen.getAllByText("guestplayer")).toHaveLength(1);
+    expect(screen.getByLabelText("guestplayer avatar fallback")).toBeInTheDocument();
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
     jest.useRealTimers();
   });
@@ -86,7 +87,7 @@ describe("Private Match", () => {
   it("sends an invite from a search result and accepts a received invite", async () => {
     render(<PvpPage />);
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search by username"), "gu");
+    await user.type(screen.getByLabelText("Search by User ID"), "gu");
     await waitFor(() => expect(searchPlayers).toHaveBeenCalledWith("gu"), { timeout: 1_000 });
     await user.click(await screen.findByRole("button", { name: "Invite" }));
     await waitFor(() => expect(sendInvite).toHaveBeenCalledWith("guestplayer"));

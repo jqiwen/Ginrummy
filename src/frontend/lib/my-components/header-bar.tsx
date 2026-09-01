@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { signOutUser } from "@/lib/auth/actions";
 import { useInvitations } from "@/lib/invites/invitation-provider";
+import { ProfileAvatar } from "@/lib/profile/profile-avatar";
 import { setGameSocketAccessToken } from "@/lib/socket";
 import type { AppDispatch, RootState } from "@shared-store/index";
 import { setGameStatus, type SideBarType } from "@shared-store/slices/game";
@@ -134,7 +135,7 @@ export function HeaderBar() {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 border-[#aa9159]/35 bg-[#0b2118] p-3 text-[#eee4cb]">
               <div className="flex items-center justify-between"><p className="font-serif text-lg font-semibold text-[#fff4d5]">Game invitations</p>{received.length > 0 && <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#cbb270]">{received.length} pending</span>}</div>
-              {received.length === 0 ? <p className="py-5 text-sm text-[#d8d1bf]/50">No invitations waiting.</p> : <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">{received.map((invite) => <li key={invite.id} className="rounded-sm border border-[#aa9159]/25 bg-[#06110d]/55 p-3"><p className="text-sm"><span className="font-semibold text-[#fff4d5]">{invite.sender.username}</span> invited you to play.</p><div className="mt-2 flex justify-end gap-2"><Button size="sm" variant="ghost" disabled={Boolean(inviteAction)} className="h-7 px-2 text-xs text-[#d8d1bf]/65 hover:bg-red-950/30 hover:text-[#ffb4a7]" onClick={() => void updateInvite(invite.id, "decline")}>Decline</Button><Button size="sm" disabled={Boolean(inviteAction)} className="h-7 rounded-sm bg-[#c6a354] px-2 text-xs font-bold text-[#102018] hover:bg-[#d8ba70]" onClick={() => void updateInvite(invite.id, "accept")}>{inviteAction === invite.id && <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />}Accept</Button></div></li>)}</ul>}
+              {received.length === 0 ? <p className="py-5 text-sm text-[#d8d1bf]/50">No invitations waiting.</p> : <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">{received.map((invite) => <li key={invite.id} className="rounded-sm border border-[#aa9159]/25 bg-[#06110d]/55 p-3"><div className="flex items-center gap-2.5"><ProfileAvatar playerId={invite.sender.playerId} avatarPath={invite.sender.avatarPath} size="sm" /><p className="min-w-0 truncate text-sm"><span className="font-semibold text-[#fff4d5]">{invite.sender.playerId}</span> invited you to play.</p></div><div className="mt-2 flex justify-end gap-2"><Button size="sm" variant="ghost" disabled={Boolean(inviteAction)} className="h-7 px-2 text-xs text-[#d8d1bf]/65 hover:bg-red-950/30 hover:text-[#ffb4a7]" onClick={() => void updateInvite(invite.id, "decline")}>Decline</Button><Button size="sm" disabled={Boolean(inviteAction)} className="h-7 rounded-sm bg-[#c6a354] px-2 text-xs font-bold text-[#102018] hover:bg-[#d8ba70]" onClick={() => void updateInvite(invite.id, "accept")}>{inviteAction === invite.id && <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />}Accept</Button></div></li>)}</ul>}
               {inviteError && <p role="alert" className="mt-2 text-xs text-[#ffb4a7]">{inviteError}</p>}
               <Button asChild variant="ghost" size="sm" className="mt-2 w-full text-[#d8d1bf]/65 hover:bg-[#d0b36d]/10 hover:text-[#fff4d6]"><Link href="/pvp">Open private match</Link></Button>
             </PopoverContent>
@@ -142,13 +143,13 @@ export function HeaderBar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className={`${surfaceButtonClass} h-10 gap-2 px-2`}>
-                <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#c8aa63]/45 bg-[#10271d] text-[#d8bb71]"><UserRound className="h-3.5 w-3.5" /></span>
-                <span className="max-w-28 truncate text-sm">{user.displayName}</span>
+                <ProfileAvatar playerId={user.playerId} avatarPath={user.avatarPath} size="sm" />
+                <span className="max-w-28 truncate text-sm">{user.playerId}</span>
                 <ChevronDown className="h-3.5 w-3.5 opacity-60" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 border-[#aa9159]/35 bg-[#0b2118] text-[#eee4cb]">
-              <DropdownMenuLabel><span className="block truncate">{user.displayName}</span><span className="mt-0.5 block truncate text-xs font-normal text-[#d8d1bf]/55">{user.email}</span></DropdownMenuLabel>
+              <DropdownMenuLabel><span className="block truncate">{user.playerId}</span><span className="mt-0.5 block truncate text-xs font-normal text-[#d8d1bf]/55">User ID</span></DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-[#9c8248]/25" />
               <DropdownMenuItem asChild className="focus:bg-[#d0b36d]/15 focus:text-[#fff6dc]"><Link href="/account"><UserRound className="mr-2 h-4 w-4" />Account</Link></DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void handleLogout()} className="focus:bg-[#d0b36d]/15 focus:text-[#fff6dc]"><LogOut className="mr-2 h-4 w-4" />Sign out</DropdownMenuItem>

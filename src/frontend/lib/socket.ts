@@ -33,8 +33,8 @@ export type InviteStatus = "pending" | "accepted" | "declined" | "cancelled" | "
 
 export interface PublicPlayerProfile {
   id: string;
-  username: string;
-  displayName: string;
+  playerId: string;
+  avatarPath: string | null;
 }
 
 export interface GameInvite {
@@ -121,7 +121,7 @@ interface ClientToServerEvents {
   "round:ready-next": (payload: { matchId: string; playerId: PlayerId; round: number }, ack: (response: SocketResponse) => void) => void;
   "player:search": (payload: { query: string }, ack: (response: SocketResponse<PublicPlayerProfile[]>) => void) => void;
   "invite:list": (payload: Record<string, never>, ack: (response: SocketResponse<InviteLists>) => void) => void;
-  "invite:send": (payload: { recipientUsername: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
+  "invite:send": (payload: { recipientPlayerId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
   "invite:accept": (payload: { inviteId: string }, ack: (response: SocketResponse<InviteMatchReady>) => void) => void;
   "invite:decline": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
   "invite:cancel": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
