@@ -192,6 +192,10 @@ describe("Socket.IO game flow", () => {
     const created = await emitAck<Membership>(host, "room:create", { bot: false });
     const matchId = created.data!.matchId;
     host.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(store.roomCount()).toBe(1);
+    expect(store.findActiveMembershipByUserId("host-user")).toMatchObject({ matchId, playerId: "1" });
 
     const port = (service.httpServer.address() as AddressInfo).port;
     const url = `http://127.0.0.1:${port}`;
@@ -207,6 +211,44 @@ describe("Socket.IO game flow", () => {
       intruder.disconnect();
       returningHost.disconnect();
     }
+  });
+
+  it("terminates a voluntary leave once, notifies the opponent, and ignores the later disconnect", async () => {
+    const created = await emitAck<Membership>(host, "room:create", { bot: false });
+    const matchId = created.data!.matchId;
+    await emitAck<Membership>(guest, "room:join", { matchId });
+
+    let opponentLeftEvents = 0;
+    guest.on("game:opponent-left", () => { opponentLeftEvents += 1; });
+    const opponentLeft = once<{ matchId: string; reason: string; redirectDelayMs: number }>(guest, "game:opponent-left");
+    const response = await emitAck(host, "room:leave", {});
+
+    expect(response.success).toBe(true);
+    await expect(opponentLeft).resolves.toEqual({ matchId, reason: "left", redirectDelayMs: 3_000 });
+    expect(store.roomCount()).toBe(0);
+    expect(store.findActiveMembershipByUserId("host-user")).toBeUndefined();
+    expect(store.findActiveMembershipByUserId("guest-user")).toBeUndefined();
+
+    host.disconnect();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(opponentLeftEvents).toBe(1);
+  });
+
+  it("handles both players leaving simultaneously without duplicate cleanup errors", async () => {
+    const created = await emitAck<Membership>(host, "room:create", { bot: false });
+    const matchId = created.data!.matchId;
+    await emitAck<Membership>(guest, "room:join", { matchId });
+
+    const [hostResponse, guestResponse] = await Promise.all([
+      emitAck(host, "room:leave", {}),
+      emitAck(guest, "room:leave", {}),
+    ]);
+
+    expect(hostResponse.success).toBe(true);
+    expect(guestResponse.success).toBe(true);
+    expect(store.roomCount()).toBe(0);
+    expect(store.getMembership(host.id ?? "")).toBeUndefined();
+    expect(store.getMembership(guest.id ?? "")).toBeUndefined();
   });
 
   it("creates, joins, deals, pushes moves/passes/knock, and synchronizes rounds", async () => {

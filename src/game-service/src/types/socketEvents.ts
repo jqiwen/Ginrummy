@@ -104,6 +104,11 @@ export interface PlayerPresenceEvent extends MatchPayload {
   playerId: PlayerId;
 }
 
+export interface OpponentLeftEvent extends MatchPayload {
+  reason: "left";
+  redirectDelayMs: number;
+}
+
 export interface GameStartedEvent extends MatchPayload {
   startedBy: PlayerId;
 }
@@ -128,7 +133,7 @@ export interface ClientToServerEvents {
   "room:create": (payload: CreateRoomPayload, ack: Ack<RoomMembership>) => void;
   "room:join": (payload: MatchPayload, ack: Ack<RoomMembership>) => void;
   "room:resume": (payload: PlayerMatchPayload, ack: Ack<RoomMembership>) => void;
-  "room:leave": (payload: PlayerMatchPayload, ack: Ack) => void;
+  "room:leave": (payload: Record<string, never>, ack: Ack) => void;
   "game:start": (payload: PlayerMatchPayload, ack: Ack) => void;
   "round:start": (payload: StartRoundPayload, ack: Ack) => void;
   "game:draw-stack": (payload: RoundPayload, ack: Ack<DrawResult>) => void;
@@ -151,6 +156,7 @@ export interface ServerToClientEvents {
   "room:joined": (membership: RoomMembership) => void;
   "room:player-joined": (event: PlayerPresenceEvent) => void;
   "room:player-left": (event: PlayerPresenceEvent) => void;
+  "game:opponent-left": (event: OpponentLeftEvent) => void;
   "game:started": (event: GameStartedEvent) => void;
   "game:dealing-started": (state: DealState) => void;
   "game:card-drawn": (event: PlayerMatchPayload & DrawResult) => void;

@@ -88,24 +88,36 @@ export function registerRoomHandlers(
       socket.data.playerId = payload.playerId;
       await socket.join(matchId);
       ack(ok(0, "Room resumed", membership(matchId, payload.playerId, room.bot)));
+      socket.to(matchId).emit("room:player-joined", { matchId, playerId: payload.playerId });
     } catch (error) {
       handleError(socket, ack, error);
     }
   });
 
-  socket.on("room:leave", async (payload, ack) => {
+  socket.on("room:leave", async (_payload, ack) => {
     try {
-      if (!isRecord(payload)) {
-        throw new StoreError(1, "Malformed room leave payload");
+      const termination = store.terminateRoomForSocket(socket.id, socket.data.user?.id);
+      if (!termination) {
+        delete socket.data.matchId;
+        delete socket.data.playerId;
+        ack(ok(0, "Room already closed"));
+        return;
       }
-      const matchId = requireString(payload.matchId, "match ID");
-      if (!isPlayerId(payload.playerId)) {
-        throw new StoreError(1, "Invalid player");
+
+      if (termination.opponentSocketIds.length > 0) {
+        io.to(termination.opponentSocketIds).emit("game:opponent-left", {
+          matchId: termination.matchId,
+          reason: "left",
+          redirectDelayMs: 3_000,
+        });
       }
-      store.requirePlayer(socket.id, matchId, payload.playerId, socket.data.user?.id);
-      socket.to(matchId).emit("room:player-left", { matchId, playerId: payload.playerId });
-      store.endRoom(matchId);
-      await io.in(matchId).socketsLeave(matchId);
+      for (const memberSocketId of termination.socketIds) {
+        const memberSocket = io.sockets.sockets.get(memberSocketId);
+        if (!memberSocket) continue;
+        delete memberSocket.data.matchId;
+        delete memberSocket.data.playerId;
+      }
+      await io.in(termination.matchId).socketsLeave(termination.matchId);
       ack(ok(0, "Room left"));
     } catch (error) {
       handleError(socket, ack, error);

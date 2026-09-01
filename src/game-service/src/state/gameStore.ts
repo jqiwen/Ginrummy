@@ -42,6 +42,11 @@ export interface SocketMembership {
   playerId: PlayerId;
 }
 
+export interface RoomTermination extends SocketMembership {
+  opponentSocketIds: string[];
+  socketIds: string[];
+}
+
 export class StoreError extends Error {
   constructor(
     readonly code: number,
@@ -176,6 +181,24 @@ export class GameStore {
     }
     this.memberships.delete(socketId);
     return membership;
+  }
+
+  terminateRoomForSocket(socketId: string, userId?: string): RoomTermination | undefined {
+    const membership = this.memberships.get(socketId);
+    if (!membership) return undefined;
+
+    const room = this.requirePlayer(socketId, membership.matchId, membership.playerId, userId);
+    const opponentId: PlayerId = membership.playerId === "0" ? "1" : "0";
+    const socketIds: string[] = [];
+    const opponentSocketIds: string[] = [];
+    for (const [memberSocketId, member] of this.memberships) {
+      if (member.matchId !== membership.matchId) continue;
+      socketIds.push(memberSocketId);
+      if (member.playerId === opponentId) opponentSocketIds.push(memberSocketId);
+    }
+
+    this.endRoom(room.matchId);
+    return { ...membership, opponentSocketIds, socketIds };
   }
 
   endRoom(matchId: string): void {

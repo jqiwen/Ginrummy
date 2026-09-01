@@ -46,4 +46,25 @@ describe("GameStore rooms", () => {
     expect(() => store.resumeRoom(room.matchId, "1", "host-new-socket", "host-user"))
       .not.toThrow();
   });
+
+  it("terminates a room once and clears every socket and user mapping", () => {
+    const store = new GameStore();
+    const room = store.createRoom(false, "host-socket", "host-user");
+    store.joinRoom(room.matchId, "guest-socket", "guest-user");
+
+    const termination = store.terminateRoomForSocket("host-socket", "host-user");
+
+    expect(termination).toMatchObject({
+      matchId: room.matchId,
+      playerId: "1",
+      opponentSocketIds: ["guest-socket"],
+    });
+    expect(termination?.socketIds).toEqual(expect.arrayContaining(["host-socket", "guest-socket"]));
+    expect(store.roomCount()).toBe(0);
+    expect(store.getMembership("host-socket")).toBeUndefined();
+    expect(store.getMembership("guest-socket")).toBeUndefined();
+    expect(store.findActiveMembershipByUserId("host-user")).toBeUndefined();
+    expect(store.findActiveMembershipByUserId("guest-user")).toBeUndefined();
+    expect(store.terminateRoomForSocket("guest-socket", "guest-user")).toBeUndefined();
+  });
 });

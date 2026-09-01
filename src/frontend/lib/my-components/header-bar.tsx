@@ -1,14 +1,14 @@
 "use client";
 
-import { ExitIcon, InfoCircledIcon } from "@radix-ui/react-icons";
-import { Bell, ChevronDown, LoaderCircle, LogOut, UserRound } from "lucide-react";
+import { Cross1Icon, ExitIcon, InfoCircledIcon } from "@radix-ui/react-icons";
+import { Bell, ChevronDown, DoorOpen, LoaderCircle, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,6 +27,8 @@ export function HeaderBar() {
   const { received, acceptInvite, declineInvite, leaveActiveMatch } = useInvitations();
   const [openPauseDialog, setOpenPauseDialog] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
+  const [leavingGame, setLeavingGame] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [inviteAction, setInviteAction] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
@@ -73,9 +75,18 @@ export function HeaderBar() {
   }
 
   async function handleLeaveGame() {
-    await leaveActiveMatch();
-    setOpenPauseDialog(false);
-    router.push("/home");
+    if (leavingGame) return;
+    setLeavingGame(true);
+    setLeaveError(null);
+    try {
+      await leaveActiveMatch();
+      setOpenPauseDialog(false);
+      router.replace("/home");
+    } catch (error) {
+      setLeaveError(error instanceof Error ? error.message : "Unable to leave the table. Please try again.");
+    } finally {
+      setLeavingGame(false);
+    }
   }
 
   return (
@@ -147,10 +158,39 @@ export function HeaderBar() {
         )}
       </div>
 
-      <Dialog open={openPauseDialog} onOpenChange={setOpenPauseDialog}>
-        <DialogContent onInteractOutside={(event) => event.preventDefault()} className="w-auto p-6">
-          <DialogHeader><DialogTitle>Leave the game</DialogTitle><DialogDescription>Your current round will not be saved.</DialogDescription></DialogHeader>
-          <div className="mt-4 flex w-[300px] flex-col gap-3"><Button onClick={() => void handleLeaveGame()}>Leave game</Button><Button variant="ghost" onClick={() => setOpenPauseDialog(false)}>Cancel</Button></div>
+      <Dialog
+        open={openPauseDialog}
+        onOpenChange={(open) => {
+          if (leavingGame) return;
+          setOpenPauseDialog(open);
+          if (open) setLeaveError(null);
+        }}
+      >
+        <DialogContent
+          className="w-[430px] border border-[#b89b58]/55 bg-[#07150f] px-8 py-9 text-[#f5edd9] shadow-[0_28px_90px_rgba(0,0,0,0.72)] [&>button:last-child]:hidden"
+          onEscapeKeyDown={(event) => { if (leavingGame) event.preventDefault(); }}
+          onInteractOutside={(event) => { if (leavingGame) event.preventDefault(); }}
+        >
+          <DialogClose asChild>
+            <Button type="button" variant="ghost" size="icon" disabled={leavingGame} aria-label="Close leave confirmation" className="absolute right-3 top-3 h-8 w-8 text-[#d8d1bf]/55 hover:bg-[#d0b36d]/10 hover:text-[#fff4d5]">
+              <Cross1Icon className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+          <DialogHeader className="items-center text-center">
+            <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-[#c8aa63]/45 bg-[#10271d] text-[#d8bb71]" aria-hidden="true"><DoorOpen className="h-5 w-5" /></span>
+            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#cbb270]">Private table</p>
+            <DialogTitle className="font-serif text-2xl font-semibold text-[#fff4d5]">Leave the table?</DialogTitle>
+            <DialogDescription className="max-w-sm pt-2 text-center text-sm leading-6 text-[#d8d1bf]/75">
+              Your current round will end, and your opponent will be returned home.
+            </DialogDescription>
+          </DialogHeader>
+          {leaveError && <p role="alert" className="rounded-sm border border-[#8f3d36]/55 bg-[#351713] px-3 py-2 text-center text-sm text-[#efb5a9]">{leaveError}</p>}
+          <div className="mt-3 grid grid-cols-2 gap-3 border-t border-[#9c8248]/25 pt-5">
+            <Button type="button" variant="outline" disabled={leavingGame} onClick={() => setOpenPauseDialog(false)} className="border-[#b89b58]/55 bg-transparent text-[#ead8a7] hover:bg-[#d0b36d]/10 hover:text-[#fff4d5]">Stay in game</Button>
+            <Button type="button" disabled={leavingGame} onClick={() => void handleLeaveGame()} className="border border-[#9a4d42]/65 bg-[#5b2821] text-[#f6d4cc] hover:bg-[#713229]">
+              {leavingGame ? <><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />Leaving table…</> : "Leave game"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </header>

@@ -507,12 +507,6 @@ useEffect(() => {
       const onBothReady = (event: { matchId: string; round: number }) => {
         if (event.matchId === matchID && event.round === currentRound) resetAll();
       };
-      const onPlayerLeft = (event: { matchId: string; playerId: PlayerId }) => {
-        if (event.matchId === matchID && event.playerId !== host) {
-          alert("Your opponent disconnected.");
-        }
-      };
-
       socket.on("game:dealing-started", onDeal);
       socket.on("game:opponent-action", onOpponentAction);
       socket.on("game:opponent-drew", onOpponentDrew);
@@ -520,7 +514,6 @@ useEffect(() => {
       socket.on("game:knocked", onKnocked);
       socket.on("round:result", onRoundResult);
       socket.on("round:both-ready", onBothReady);
-      socket.on("room:player-left", onPlayerLeft);
       return () => {
         socket.off("game:dealing-started", onDeal);
         socket.off("game:opponent-action", onOpponentAction);
@@ -529,7 +522,6 @@ useEffect(() => {
         socket.off("game:knocked", onKnocked);
         socket.off("round:result", onRoundResult);
         socket.off("round:both-ready", onBothReady);
-        socket.off("room:player-left", onPlayerLeft);
       };
     }, [matchID, roomId, host, currentRound, player1Cards, whosTurn]);
     

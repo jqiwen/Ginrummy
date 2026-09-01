@@ -7,20 +7,24 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 
+import { OpponentLeftDialog } from "@/lib/my-components/opponent-left-dialog";
 import {
   connectGameSocket,
   type GameInvite,
   type InviteLists,
   type InviteMatchReady,
+  type OpponentLeftEvent,
   type PublicPlayerProfile,
   type SocketResponse,
   waitForGameSocket,
 } from "@/lib/socket";
-import type { RootState } from "@shared-store/index";
+import type { AppDispatch, RootState } from "@shared-store/index";
+import { resetGameStatus } from "@shared-store/slices/game";
 
 const ACTIVE_MATCH_KEY = "ginrummy.activeMatch";
 
@@ -75,15 +79,35 @@ function readStoredMatch(): InviteMatchReady | null {
 
 export function InvitationProvider({ children }: { children: React.ReactNode }) {
   const authStatus = useSelector((state: RootState) => state.user.status);
+  const dispatch = useDispatch<AppDispatch>();
   const router = useRouter();
   const pathname = usePathname();
   const [lists, setLists] = useState<InviteLists>({ received: [], sent: [] });
   const [activeMatch, setActiveMatch] = useState<InviteMatchReady | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionNotice, setConnectionNotice] = useState(false);
+  const [opponentDeparture, setOpponentDeparture] = useState<{
+    matchId: string;
+    secondsRemaining: number;
+    redirectDelayMs: number;
+  } | null>(null);
+  const handledTerminations = useRef(new Set<string>());
+  const leaveRequest = useRef<Promise<void> | null>(null);
+
+  const clearLocalMatch = useCallback(() => {
+    window.sessionStorage.removeItem(ACTIVE_MATCH_KEY);
+    setActiveMatch(null);
+    setConnectionNotice(false);
+    setOpponentDeparture(null);
+    dispatch(resetGameStatus());
+  }, [dispatch]);
 
   const rememberMatch = useCallback((match: InviteMatchReady) => {
     const stored = readStoredMatch();
+    handledTerminations.current.delete(match.membership.matchId);
+    setConnectionNotice(false);
+    setOpponentDeparture(null);
     setActiveMatch(match);
     window.sessionStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify(match));
     if (stored?.membership.matchId === match.membership.matchId) return;
@@ -116,6 +140,9 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
       setLists({ received: [], sent: [] });
       if (authStatus === "unauthenticated") {
         setActiveMatch(null);
+        setConnectionNotice(false);
+        setOpponentDeparture(null);
+        handledTerminations.current.clear();
         window.sessionStorage.removeItem(ACTIVE_MATCH_KEY);
       }
       return;
@@ -142,6 +169,32 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
       }));
     };
     const onConnect = () => void refreshInvites();
+    const currentMatch = () => activeMatch ?? readStoredMatch();
+    const onPlayerLeft = (event: { matchId: string; playerId: "0" | "1" }) => {
+      const match = currentMatch();
+      if (match?.membership.matchId === event.matchId && match.membership.playerId !== event.playerId) {
+        setConnectionNotice(true);
+      }
+    };
+    const onPlayerJoined = (event: { matchId: string; playerId: "0" | "1" }) => {
+      const match = currentMatch();
+      if (match?.membership.matchId === event.matchId && match.membership.playerId !== event.playerId) {
+        setConnectionNotice(false);
+      }
+    };
+    const onOpponentLeft = (event: OpponentLeftEvent) => {
+      const match = currentMatch();
+      if (match?.membership.matchId !== event.matchId || handledTerminations.current.has(event.matchId)) return;
+      handledTerminations.current.add(event.matchId);
+      window.sessionStorage.removeItem(ACTIVE_MATCH_KEY);
+      setConnectionNotice(false);
+      dispatch(resetGameStatus());
+      setOpponentDeparture({
+        matchId: event.matchId,
+        redirectDelayMs: event.redirectDelayMs,
+        secondsRemaining: Math.max(1, Math.ceil(event.redirectDelayMs / 1_000)),
+      });
+    };
 
     socket.on("invite:received", onReceived);
     socket.on("invite:declined", removeInvite);
@@ -149,6 +202,9 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
     socket.on("invite:expired", removeInvite);
     socket.on("invite:accepted", removeAcceptedInvite);
     socket.on("match:ready", rememberMatch);
+    socket.on("room:player-left", onPlayerLeft);
+    socket.on("room:player-joined", onPlayerJoined);
+    socket.on("game:opponent-left", onOpponentLeft);
     socket.on("connect", onConnect);
     if (socket.connected) void refreshInvites();
 
@@ -159,9 +215,29 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
       socket.off("invite:expired", removeInvite);
       socket.off("invite:accepted", removeAcceptedInvite);
       socket.off("match:ready", rememberMatch);
+      socket.off("room:player-left", onPlayerLeft);
+      socket.off("room:player-joined", onPlayerJoined);
+      socket.off("game:opponent-left", onOpponentLeft);
       socket.off("connect", onConnect);
     };
-  }, [authStatus, refreshInvites, rememberMatch]);
+  }, [activeMatch, authStatus, dispatch, refreshInvites, rememberMatch]);
+
+  useEffect(() => {
+    if (!opponentDeparture) return;
+    const interval = window.setInterval(() => {
+      setOpponentDeparture((current) => current
+        ? { ...current, secondsRemaining: Math.max(1, current.secondsRemaining - 1) }
+        : null);
+    }, 1_000);
+    const redirect = window.setTimeout(() => {
+      clearLocalMatch();
+      router.replace("/home");
+    }, opponentDeparture.redirectDelayMs);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(redirect);
+    };
+  }, [clearLocalMatch, opponentDeparture?.matchId, opponentDeparture?.redirectDelayMs, router]);
 
   const searchPlayers = useCallback(async (query: string) => {
     if (query.trim().length < 2) return [];
@@ -216,24 +292,25 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
     setLists((current) => ({ ...current, sent: current.sent.filter((item) => item.id !== inviteId) }));
   }, []);
 
-  const leaveActiveMatch = useCallback(async () => {
-    const match = activeMatch ?? readStoredMatch();
-    if (match) {
-      try {
+  const leaveActiveMatch = useCallback(() => {
+    if (leaveRequest.current) return leaveRequest.current;
+    const request = (async () => {
+      const match = activeMatch ?? readStoredMatch();
+      if (match) {
         const socket = await waitForGameSocket();
-        await new Promise<SocketResponse>((resolve) => {
-          socket.emit("room:leave", {
-            matchId: match.membership.matchId,
-            playerId: match.membership.playerId,
-          }, resolve);
+        const response = await new Promise<SocketResponse>((resolve) => {
+          socket.emit("room:leave", {}, resolve);
         });
-      } catch {
-        // The local active seat is still cleared when the service is unavailable.
+        if (!response.success) throw new Error(messageFor(response));
       }
-    }
-    window.sessionStorage.removeItem(ACTIVE_MATCH_KEY);
-    setActiveMatch(null);
-  }, [activeMatch]);
+      clearLocalMatch();
+    })();
+    const trackedRequest = request.finally(() => {
+      if (leaveRequest.current === trackedRequest) leaveRequest.current = null;
+    });
+    leaveRequest.current = trackedRequest;
+    return trackedRequest;
+  }, [activeMatch, clearLocalMatch]);
 
   const value = useMemo<InvitationContextValue>(() => ({
     received: lists.received,
@@ -262,7 +339,18 @@ export function InvitationProvider({ children }: { children: React.ReactNode }) 
     leaveActiveMatch,
   ]);
 
-  return <InvitationContext.Provider value={value}>{children}</InvitationContext.Provider>;
+  return (
+    <InvitationContext.Provider value={value}>
+      {children}
+      {connectionNotice && !opponentDeparture && (
+        <div role="status" className="fixed bottom-5 left-1/2 z-[1100] -translate-x-1/2 rounded-sm border border-[#b89b58]/45 bg-[#07150f] px-4 py-3 text-sm text-[#f5edd9] shadow-[0_16px_45px_rgba(0,0,0,0.55)]">
+          <span className="font-semibold text-[#fff4d5]">Opponent disconnected.</span>{" "}
+          <span className="text-[#d8d1bf]/65">Waiting for them to reconnect…</span>
+        </div>
+      )}
+      {opponentDeparture && <OpponentLeftDialog secondsRemaining={opponentDeparture.secondsRemaining} />}
+    </InvitationContext.Provider>
+  );
 }
 
 export function useInvitations(): InvitationContextValue {

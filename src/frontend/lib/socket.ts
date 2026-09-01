@@ -58,6 +58,12 @@ export interface InviteMatchReady {
   opponent: PublicPlayerProfile | null;
 }
 
+export interface OpponentLeftEvent {
+  matchId: string;
+  reason: "left";
+  redirectDelayMs: number;
+}
+
 export interface DealState {
   matchId: string;
   round: number;
@@ -119,7 +125,7 @@ interface ClientToServerEvents {
   "invite:accept": (payload: { inviteId: string }, ack: (response: SocketResponse<InviteMatchReady>) => void) => void;
   "invite:decline": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
   "invite:cancel": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
-  "room:leave": (payload: { matchId: string; playerId: PlayerId }, ack: (response: SocketResponse) => void) => void;
+  "room:leave": (payload: Record<string, never>, ack: (response: SocketResponse) => void) => void;
 }
 
 interface ServerToClientEvents {
@@ -127,6 +133,7 @@ interface ServerToClientEvents {
   "room:joined": (membership: RoomMembership) => void;
   "room:player-joined": (event: { matchId: string; playerId: PlayerId }) => void;
   "room:player-left": (event: { matchId: string; playerId: PlayerId }) => void;
+  "game:opponent-left": (event: OpponentLeftEvent) => void;
   "game:started": (event: { matchId: string; startedBy: PlayerId }) => void;
   "game:dealing-started": (state: DealState) => void;
   "game:opponent-action": (event: GameOperationEvent) => void;
