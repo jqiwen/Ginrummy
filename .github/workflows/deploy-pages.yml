@@ -37,6 +37,8 @@ jobs:
         shell: bash
         env:
           NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$NEXT_PUBLIC_GAME_WS_URL" ]; then
             echo "Missing required repository variable: CLOUD_RUN_GAME_SERVICE_URL"
@@ -44,6 +46,18 @@ jobs:
           fi
           if [[ "$NEXT_PUBLIC_GAME_WS_URL" != https://* ]]; then
             echo "CLOUD_RUN_GAME_SERVICE_URL must start with https://"
+            exit 1
+          fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "Missing required repository variable: NEXT_PUBLIC_SUPABASE_URL"
+            exit 1
+          fi
+          if [[ "$NEXT_PUBLIC_SUPABASE_URL" != https://* ]]; then
+            echo "NEXT_PUBLIC_SUPABASE_URL must start with https://"
+            exit 1
+          fi
+          if [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "Missing required repository variable: NEXT_PUBLIC_SUPABASE_ANON_KEY"
             exit 1
           fi
 
@@ -55,6 +69,8 @@ jobs:
         working-directory: src/frontend
         env:
           NEXT_PUBLIC_GAME_WS_URL: ${{ vars.CLOUD_RUN_GAME_SERVICE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Upload GitHub Pages artifact

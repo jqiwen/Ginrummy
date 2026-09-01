@@ -9,9 +9,11 @@ export interface SocketResponse<T = never> {
 
 export type Ack<T = never> = (response: SocketResponse<T>) => void;
 
-export interface AuthPayload {
+export interface AuthenticatedSocketUser {
+  id: string;
+  email: string;
   username: string;
-  password: string;
+  displayName: string;
 }
 
 export interface CreateRoomPayload {
@@ -81,8 +83,6 @@ export interface BothReadyEvent extends MatchPayload {
 }
 
 export interface ClientToServerEvents {
-  "auth:signup": (payload: AuthPayload, ack: Ack) => void;
-  "auth:login": (payload: AuthPayload, ack: Ack) => void;
   "room:create": (payload: CreateRoomPayload, ack: Ack<RoomMembership>) => void;
   "room:join": (payload: MatchPayload, ack: Ack<RoomMembership>) => void;
   "room:resume": (payload: PlayerMatchPayload, ack: Ack<RoomMembership>) => void;
@@ -123,4 +123,5 @@ export interface InterServerEvents {}
 export interface SocketData {
   matchId?: string;
   playerId?: PlayerId;
+  user?: AuthenticatedSocketUser;
 }

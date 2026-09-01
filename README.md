@@ -1,6 +1,6 @@
 # Gin Rummy — Dozenal Edition
 
-A real-time multiplayer Gin Rummy web game built with **Next.js, TypeScript, Socket.IO, and Google Cloud Run**.
+A real-time multiplayer Gin Rummy web game built with **Next.js, TypeScript, Supabase Auth, Socket.IO, and Google Cloud Run**.
 
 Unlike standard Gin Rummy, this version uses a **base-12 (dozenal) card system** with a 64-card deck, introducing a different scoring model and game strategy while keeping the core draw, discard, knock, and round mechanics of Gin Rummy.
 
@@ -15,13 +15,22 @@ Welcome to "Gin Rummy, With a Twist"! This project is a digital recreation of th
 - **Dozenal Game Logic**: Play using a base-twelve scoring system, offering a fresh take on Gin Rummy strategies.
 - **Interactive Gameplay**: Smooth animations for dealing and sorting cards, responsive card interactions, and clear game state updates.
 - **Multiplayer Support**: Engage in matches with other players through online matchmaking or by inviting friends.
-- **User Profiles & Rankings**: Create accounts, track your progress, and see where you rank on the global leaderboard.
+- **Persistent Player Identity**: Supabase email/password accounts and database-backed public profiles secure online multiplayer seats.
 - **Cross-Platform Compatibility**: Enjoy the game on desktop, mobile, and tablet with a responsive Next.js UI and a real-time Node.js game service.
 
 ## Tech Stack
 - **Frontend**: Next.js, Redux, Shadcn/ui for a responsive and dynamic user interface.
 - **Game service**: Node.js, TypeScript, and Socket.IO over WebSocket, with authoritative in-memory match state.
+- **Authentication**: Supabase Auth and PostgreSQL profiles with row-level security.
 - **Hosting target**: GitHub Pages for the frontend and Google Cloud Run for the game service.
+
+## Authentication architecture
+
+Supabase Auth is the only credential authority. The static frontend restores Supabase sessions, loads the matching `profiles` row, and keeps only presentation-safe identity state in Redux. It sends the current access token through the shared Socket.IO handshake; Cloud Run validates that token with Supabase and binds the verified `auth.users` UUID to each online room seat. Passwords and access tokens are never stored in Redux or the game service.
+
+Guest users can use public pages and play the bot tutorial. Creating, joining, resuming, or playing an online room requires a verified account on both the client and service boundaries.
+
+Apply the included profile migration and complete the one-time project settings in [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md) before testing real accounts.
 
 ## Run locally
 
@@ -84,16 +93,19 @@ Configure these at **GitHub -> Repository -> Settings -> Secrets and variables -
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/869554899500/locations/global/workloadIdentityPools/github-actions/providers/github` | Exchanges the GitHub OIDC token for short-lived Google credentials | `deploy-game-service.yml` |
 | `GCP_SERVICE_ACCOUNT` | `ginrummy-github-deployer@ginrummy-506118.iam.gserviceaccount.com` | Identifies the least-privilege deployment identity | `deploy-game-service.yml` |
 | `FRONTEND_ORIGIN` | `https://ginrummy.jqiwen.com` | Configures the exact production origin allowed by Socket.IO CORS | `deploy-game-service.yml` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Configures the browser client and is mapped to `SUPABASE_URL` on Cloud Run | Both deployment workflows |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public anon/publishable key | Configures the browser client and is mapped to `SUPABASE_ANON_KEY` on Cloud Run | Both deployment workflows |
 
 The backend uses Google Workload Identity Federation. Do not create or store a service-account JSON key. The one-time provider and least-privilege IAM setup is documented in [docs/CICD_SETUP.md](docs/CICD_SETUP.md).
 
 ## One-time GitHub and Google Cloud setup
 
 1. Complete the Workload Identity Federation and IAM setup in [docs/CICD_SETUP.md](docs/CICD_SETUP.md).
-2. Create all eight repository variables in the table above.
-3. In **Settings -> Pages**, keep **Source** set to **GitHub Actions** and keep the custom domain set to `ginrummy.jqiwen.com`.
-4. Keep the Cloud Run service publicly invokable so browser WebSocket clients and candidate verification can reach it.
-5. Deploy the backend first. If its service URL changes, update `CLOUD_RUN_GAME_SERVICE_URL`, then deploy the frontend.
+2. Apply and configure Supabase by following [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md).
+3. Create all ten repository variables in the table above.
+4. In **Settings -> Pages**, keep **Source** set to **GitHub Actions** and keep the custom domain set to `ginrummy.jqiwen.com`.
+5. Keep the Cloud Run service publicly invokable so browser WebSocket clients and candidate verification can reach it.
+6. Deploy the backend first. If its service URL changes, update `CLOUD_RUN_GAME_SERVICE_URL`, then deploy the frontend.
 
 Both workflows also support manual runs from the Actions tab. Their push path filters are independent: frontend and its workflow file trigger Pages; game service and its workflow file trigger Cloud Run. The general CI workflow verifies both packages without deploying.
 

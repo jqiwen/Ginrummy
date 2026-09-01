@@ -35,7 +35,7 @@ function requirePlayerPayload(
     throw new StoreError(1, "Invalid player");
   }
   return {
-    room: store.requirePlayer(socket.id, matchId, payload.playerId),
+    room: store.requirePlayer(socket.id, matchId, payload.playerId, socket.data.user?.id),
     matchId,
     playerId: payload.playerId,
   };

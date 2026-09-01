@@ -1,29 +1,12 @@
-"use client"
-
-import { Button } from "@/components/ui/button"
 import Link from "next/link";
 
-import { useSelector,} from 'react-redux';
-import { RootState } from '@shared-store/index'; 
+import { AuthShell } from "@/components/auth/auth-shell";
+import { SignUpForm } from "@/lib/my-components/signup-form";
 
-
-import {SignUpForm} from "@my-components/signup-form"
-
-export default function SignUp() {
-
-  const user = useSelector((state: RootState) => state.user);
-  console.log(user);
-
-
+export default function SignupPage() {
   return (
-    
-    <div className="w-full h-full flex"> 
-      <div className="w-full flex flex-col items-center justify-center">
-        <div> SignUp </div>
-        <SignUpForm></SignUpForm>
-        <Button variant="link"><Link href="/login" className="">back to log in</Link></Button>
-      </div>
-    </div>
-   
+    <AuthShell eyebrow="Join the table" title="Create account" description="Choose your player name and save a seat for private matches." footer={<>Already registered? <Link href="/login" className="font-semibold text-[#e2c77f] underline-offset-4 hover:underline">Sign in</Link></>}>
+      <SignUpForm />
+    </AuthShell>
   );
 }

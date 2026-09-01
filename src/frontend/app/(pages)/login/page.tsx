@@ -1,21 +1,12 @@
-import { Button } from "@/components/ui/button"
 import Link from "next/link";
 
+import { AuthShell } from "@/components/auth/auth-shell";
+import { LogInForm } from "@/lib/my-components/login-form";
 
-import { LogInForm } from "@my-components/login-form";
-
-export default function Login() {
+export default function LoginPage() {
   return (
-    
-    <div className="w-full h-full flex"> 
-      <div className="w-full flex flex-col items-center justify-center">
-        <div> Log In </div>
-        <LogInForm></LogInForm>
-        <Button variant="link"><Link href="/signup" className="">Sign Up</Link></Button>
-        <Button variant="link"><Link href="/home" className="">back to home</Link></Button>
-      </div>
-    </div>
-   
+    <AuthShell eyebrow="Player access" title="Welcome back" description="Sign in to create a private table or rejoin a match." footer={<>New to the table? <Link href="/signup" className="font-semibold text-[#e2c77f] underline-offset-4 hover:underline">Create an account</Link></>}>
+      <LogInForm />
+    </AuthShell>
   );
 }
-

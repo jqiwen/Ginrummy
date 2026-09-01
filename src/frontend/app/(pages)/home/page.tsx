@@ -3,6 +3,7 @@
 import { ArrowRight, BookOpenText, Diamond, Play, UsersRound } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSelector } from "react-redux";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/drawer";
 import { publicAssetPath } from "@/lib/publicAsset";
 import { HeaderBar } from "@/lib/my-components/header-bar";
+import type { RootState } from "@shared-store/index";
 
 const gameModes = [
   {
@@ -28,10 +30,13 @@ const gameModes = [
     title: "Play with a Friend",
     description: "Create or join a multiplayer room.",
     icon: UsersRound,
+    requiresAccount: true,
   },
 ];
 
 export default function HomePage() {
+  const authStatus = useSelector((state: RootState) => state.user.status);
+
   return (
     <div className="flex h-screen min-h-[640px] min-w-[1100px] flex-col overflow-hidden bg-[#06110d] text-[#f5edd9]">
       <HeaderBar />
@@ -81,11 +86,13 @@ export default function HomePage() {
                     <div className="grid grid-cols-2 gap-4">
                       {gameModes.map((mode) => {
                         const Icon = mode.icon;
+                        const needsLogin = mode.requiresAccount && authStatus !== "authenticated";
+                        const href = needsLogin ? "/login?returnTo=%2Fpvp" : mode.href;
 
                         return (
                           <Link
                             key={mode.href}
-                            href={mode.href}
+                            href={href}
                             className="group/mode flex min-h-32 items-center gap-5 rounded-sm border border-[#a98d50]/35 bg-[#10271d] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#d2b66e]/75 hover:bg-[#153126] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d2b66e]"
                           >
                             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#c8aa63]/45 bg-[#07140f] text-[#d8bb71]">
@@ -98,6 +105,11 @@ export default function HomePage() {
                               <span className="mt-1 block text-sm leading-5 text-[#d8d0be]/65">
                                 {mode.description}
                               </span>
+                              {needsLogin && (
+                                <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-[#cbb270]">
+                                  Account required
+                                </span>
+                              )}
                             </span>
                             <ArrowRight className="h-5 w-5 shrink-0 text-[#cdb16b] transition-transform duration-200 group-hover/mode:translate-x-1" />
                           </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Cross1Icon } from "@radix-ui/react-icons";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -27,6 +27,8 @@ function GameContent() {
   const fullRoomId = searchParams.get("roomId") ?? "tutorial";
   const roomId = fullRoomId.split("-")[0];
   const host = fullRoomId.split("-")[1] ?? "1";
+  const isTutorial = roomId === "tutorial";
+  const router = useRouter();
 
   const dispatch = useDispatch<AppDispatch>();
   const game = useSelector((state: RootState) => state.game);
@@ -36,10 +38,17 @@ function GameContent() {
   const [boardScale, setBoardScale] = useState(1);
   const boardRef = useRef<HTMLDivElement>(null);
   const sidebarOpen = Boolean(game.showSideBar);
+  const canRenderGame = isTutorial || user.status === "authenticated";
 
   useEffect(() => {
-    setUserName(user.username === "" ? "User" : user.username);
-  }, [user.username]);
+    setUserName(user.displayName || user.username || "Guest");
+  }, [user.displayName, user.username]);
+
+  useEffect(() => {
+    if (!isTutorial && user.status === "unauthenticated") {
+      router.replace("/login?returnTo=%2Fpvp");
+    }
+  }, [isTutorial, router, user.status]);
 
   useEffect(() => {
     const board = boardRef.current;
@@ -63,11 +72,19 @@ function GameContent() {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [canRenderGame]);
 
   const handleClose = () => {
     dispatch(setGameStatus({ showSideBar: null }));
   };
+
+  if (!canRenderGame) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#06110d] font-serif text-lg text-[#f5edd9]">
+        Restoring your seat…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen min-h-[640px] min-w-[1100px] flex-col overflow-hidden bg-[#06110d]">

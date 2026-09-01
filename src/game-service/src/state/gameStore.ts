@@ -11,6 +11,7 @@ import type {
 export interface PlayerConnection {
   isBot: boolean;
   socketId?: string;
+  userId?: string;
 }
 
 export interface PendingDraw {
@@ -54,10 +55,10 @@ export class GameStore {
   private readonly rooms = new Map<string, RoomState>();
   private readonly memberships = new Map<string, SocketMembership>();
 
-  createRoom(bot: boolean, socketId: string): RoomState {
+  createRoom(bot: boolean, socketId: string, userId?: string): RoomState {
     const matchId = this.generateMatchId(bot);
     const players: Partial<Record<PlayerId, PlayerConnection>> = {
-      "1": { isBot: false, socketId },
+      "1": { isBot: false, socketId, ...(userId ? { userId } : {}) },
     };
     if (bot) {
       players["0"] = { isBot: true };
@@ -83,21 +84,27 @@ export class GameStore {
     return room;
   }
 
-  joinRoom(matchId: string, socketId: string): RoomState {
+  joinRoom(matchId: string, socketId: string, userId: string): RoomState {
     const room = this.getRoom(matchId);
     if (room.players["0"]) {
       throw new StoreError(421, "Room Already Full");
     }
-    room.players["0"] = { isBot: false, socketId };
+    room.players["0"] = { isBot: false, socketId, userId };
     this.memberships.set(socketId, { matchId, playerId: "0" });
     return room;
   }
 
-  resumeRoom(matchId: string, playerId: PlayerId, socketId: string): RoomState {
+  resumeRoom(matchId: string, playerId: PlayerId, socketId: string, userId?: string): RoomState {
     const room = this.getRoom(matchId);
     const player = room.players[playerId];
     if (!player || player.isBot) {
       throw new StoreError(1, "Invalid player");
+    }
+    if (!room.bot && !userId) {
+      throw new StoreError(401, "Authentication required");
+    }
+    if (player.userId && player.userId !== userId) {
+      throw new StoreError(403, "This player seat belongs to another account");
     }
     player.socketId = socketId;
     this.memberships.set(socketId, { matchId, playerId });
@@ -134,12 +141,23 @@ export class GameStore {
     return this.memberships.get(socketId);
   }
 
-  requirePlayer(socketId: string, matchId: string, playerId: PlayerId): RoomState {
+  requirePlayer(socketId: string, matchId: string, playerId: PlayerId, userId?: string): RoomState {
     const membership = this.memberships.get(socketId);
     if (!membership || membership.matchId !== matchId || membership.playerId !== playerId) {
       throw new StoreError(1, "Invalid player");
     }
-    return this.getRoom(matchId);
+    const room = this.getRoom(matchId);
+    const player = room.players[playerId];
+    if (!player || player.isBot) {
+      throw new StoreError(1, "Invalid player");
+    }
+    if (!room.bot && !userId) {
+      throw new StoreError(401, "Authentication required");
+    }
+    if (player.userId && player.userId !== userId) {
+      throw new StoreError(403, "This player seat belongs to another account");
+    }
+    return room;
   }
 
   getPlayerSocket(room: RoomState, playerId: PlayerId): string | undefined {

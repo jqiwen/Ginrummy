@@ -22,6 +22,13 @@ function membership(matchId: string, playerId: "0" | "1", bot: boolean): RoomMem
   return { matchId, playerId, bot };
 }
 
+function requireAuthenticatedUser(socket: GameSocket) {
+  if (!socket.data.user) {
+    throw new StoreError(401, "Authentication required");
+  }
+  return socket.data.user;
+}
+
 export function registerRoomHandlers(
   io: GameServer,
   socket: GameSocket,
@@ -32,7 +39,8 @@ export function registerRoomHandlers(
       if (!isRecord(payload) || typeof payload.bot !== "boolean") {
         throw new StoreError(1, "Malformed room creation payload");
       }
-      const room = store.createRoom(payload.bot, socket.id);
+      const userId = payload.bot ? socket.data.user?.id : requireAuthenticatedUser(socket).id;
+      const room = store.createRoom(payload.bot, socket.id, userId);
       socket.data.matchId = room.matchId;
       socket.data.playerId = "1";
       await socket.join(room.matchId);
@@ -50,7 +58,8 @@ export function registerRoomHandlers(
         throw new StoreError(1, "Malformed room join payload");
       }
       const matchId = requireString(payload.matchId, "match ID");
-      const room = store.joinRoom(matchId, socket.id);
+      const user = requireAuthenticatedUser(socket);
+      const room = store.joinRoom(matchId, socket.id, user.id);
       socket.data.matchId = matchId;
       socket.data.playerId = "0";
       await socket.join(matchId);
@@ -72,7 +81,9 @@ export function registerRoomHandlers(
       if (!isPlayerId(payload.playerId)) {
         throw new StoreError(1, "Invalid player");
       }
-      const room = store.resumeRoom(matchId, payload.playerId, socket.id);
+      const room = store.getRoom(matchId);
+      if (!room.bot) requireAuthenticatedUser(socket);
+      store.resumeRoom(matchId, payload.playerId, socket.id, socket.data.user?.id);
       socket.data.matchId = matchId;
       socket.data.playerId = payload.playerId;
       await socket.join(matchId);
@@ -91,7 +102,7 @@ export function registerRoomHandlers(
       if (!isPlayerId(payload.playerId)) {
         throw new StoreError(1, "Invalid player");
       }
-      store.requirePlayer(socket.id, matchId, payload.playerId);
+      store.requirePlayer(socket.id, matchId, payload.playerId, socket.data.user?.id);
       store.leaveRoom(socket.id);
       await socket.leave(matchId);
       socket.to(matchId).emit("room:player-left", { matchId, playerId: payload.playerId });

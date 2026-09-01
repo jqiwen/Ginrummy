@@ -59,8 +59,6 @@ export interface RoundResultEvent {
 }
 
 interface ClientToServerEvents {
-  "auth:signup": (payload: { username: string; password: string }, ack: (response: SocketResponse) => void) => void;
-  "auth:login": (payload: { username: string; password: string }, ack: (response: SocketResponse) => void) => void;
   "room:create": (payload: { bot: boolean }, ack: (response: SocketResponse<RoomMembership>) => void) => void;
   "room:join": (payload: { matchId: string }, ack: (response: SocketResponse<RoomMembership>) => void) => void;
   "room:resume": (payload: { matchId: string; playerId: PlayerId }, ack: (response: SocketResponse<RoomMembership>) => void) => void;
@@ -94,11 +92,28 @@ interface ServerToClientEvents {
 const gameServiceUrl = process.env.NEXT_PUBLIC_GAME_WS_URL ?? "http://localhost:8080";
 
 export const gameSocket: Socket<ServerToClientEvents, ClientToServerEvents> = io(gameServiceUrl, {
+  auth: {},
   transports: ["websocket"],
   autoConnect: false,
   reconnection: true,
   reconnectionAttempts: Infinity,
 });
+
+let gameSocketAccessToken: string | null = null;
+
+export function setGameSocketAccessToken(accessToken: string | null, reconnect = false): void {
+  gameSocketAccessToken = accessToken;
+  gameSocket.auth = accessToken ? { accessToken } : {};
+
+  if (!accessToken) {
+    if (reconnect && gameSocket.connected) gameSocket.disconnect();
+    return;
+  }
+
+  if (reconnect && gameSocket.connected) {
+    gameSocket.disconnect().connect();
+  }
+}
 
 gameSocket.on("connect", () => {
   console.info("[game-service] connected");
@@ -121,6 +136,7 @@ gameSocket.io.on("reconnect", (attempt) => {
 });
 
 export function connectGameSocket(): typeof gameSocket {
+  gameSocket.auth = gameSocketAccessToken ? { accessToken: gameSocketAccessToken } : {};
   if (!gameSocket.connected) {
     gameSocket.connect();
   }
@@ -156,14 +172,4 @@ export function waitForGameSocket(timeoutMs = 10_000): Promise<typeof gameSocket
     socket.once("connect", onConnect);
     socket.once("connect_error", onConnectError);
   });
-}
-
-export function authSignup(username: string, password: string): Promise<SocketResponse> {
-  const socket = connectGameSocket();
-  return new Promise((resolve) => socket.emit("auth:signup", { username, password }, resolve));
-}
-
-export function authLogin(username: string, password: string): Promise<SocketResponse> {
-  const socket = connectGameSocket();
-  return new Promise((resolve) => socket.emit("auth:login", { username, password }, resolve));
 }

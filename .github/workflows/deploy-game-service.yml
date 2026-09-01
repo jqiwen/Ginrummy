@@ -25,6 +25,8 @@ env:
   GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
   GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
   FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+  SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+  SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
 jobs:
   deploy:
@@ -51,11 +53,23 @@ jobs:
               missing=1
             fi
           done
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "Missing required repository variable: NEXT_PUBLIC_SUPABASE_URL"
+            missing=1
+          fi
+          if [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Missing required repository variable: NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            missing=1
+          fi
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
           if [[ "$FRONTEND_ORIGIN" != https://* ]]; then
             echo "FRONTEND_ORIGIN must start with https://"
+            exit 1
+          fi
+          if [[ "$SUPABASE_URL" != https://* ]]; then
+            echo "NEXT_PUBLIC_SUPABASE_URL must start with https://"
             exit 1
           fi
 
@@ -121,7 +135,7 @@ jobs:
             --timeout 3600 \
             --min-instances 0 \
             --max-instances 1 \
-            --update-env-vars "FRONTEND_ORIGIN=$FRONTEND_ORIGIN" \
+            --update-env-vars "FRONTEND_ORIGIN=$FRONTEND_ORIGIN,SUPABASE_URL=$SUPABASE_URL,SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
             --no-traffic \
             --tag "$TAG" \
             --quiet \

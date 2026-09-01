@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
 import { pathToFileURL } from "node:url";
 import { Server } from "socket.io";
-import { registerAuthHandlers } from "./socket/authHandlers.js";
+import { createSupabaseTokenVerifier, type TokenVerifier } from "./auth/supabaseTokenVerifier.js";
 import { registerGameHandlers } from "./socket/gameHandlers.js";
 import { registerRoomHandlers } from "./socket/roomHandlers.js";
 import { GameStore, gameStore } from "./state/gameStore.js";
@@ -31,6 +31,7 @@ export function parseAllowedOrigins(configuredOrigins = ""): string[] {
 export function createGameService(
   store: GameStore = gameStore,
   configuredOrigins = process.env.FRONTEND_ORIGIN ?? "",
+  tokenVerifier: TokenVerifier = createSupabaseTokenVerifier(),
 ): GameService {
   const httpServer = createHttpServer((request, response) => {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -73,6 +74,30 @@ export function createGameService(
     },
   );
 
+  io.use(async (socket, next) => {
+    const accessToken: unknown = socket.handshake.auth.accessToken;
+    if (accessToken === undefined || accessToken === null) {
+      next();
+      return;
+    }
+
+    if (typeof accessToken !== "string" || accessToken.trim() === "") {
+      next(new Error("Invalid or expired access token"));
+      return;
+    }
+
+    try {
+      socket.data.user = await tokenVerifier.verifyAccessToken(accessToken);
+      next();
+    } catch {
+      console.warn(
+        "[game-service] rejected unauthenticated Socket.IO handshake",
+        JSON.stringify({ timestamp: new Date().toISOString(), reason: "token_verification_failed" }),
+      );
+      next(new Error("Invalid or expired access token"));
+    }
+  });
+
   io.on("connection", (socket) => {
     socket.use((packet, next) => {
       if (typeof packet.at(-1) !== "function") {
@@ -85,7 +110,6 @@ export function createGameService(
       }
       next();
     });
-    registerAuthHandlers(io, socket);
     registerRoomHandlers(io, socket, store);
     registerGameHandlers(io, socket, store);
   });
@@ -102,5 +126,9 @@ async function start(): Promise<void> {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void start();
+  void start().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unknown startup error";
+    console.error(`[game-service] Startup failed\n\n${message}`);
+    process.exitCode = 1;
+  });
 }

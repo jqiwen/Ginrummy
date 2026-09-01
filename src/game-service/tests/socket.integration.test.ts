@@ -7,6 +7,8 @@ import { GameStore } from "../src/state/gameStore.js";
 import type { Card, DealState, GameOperation, RoundResult } from "../src/game/gameTypes.js";
 import { calculateRoundScore } from "../src/game/Scoring.js";
 import { DECK } from "../src/game/Card.js";
+import type { TokenVerifier } from "../src/auth/supabaseTokenVerifier.js";
+import type { AuthenticatedSocketUser } from "../src/types/socketEvents.js";
 
 interface Response<T = never> {
   success: boolean;
@@ -28,6 +30,20 @@ function once<T>(socket: Socket, event: string): Promise<T> {
 function emitAck<T>(socket: Socket, event: string, payload: object): Promise<Response<T>> {
   return new Promise((resolve) => socket.emit(event, payload, resolve));
 }
+
+const users: Record<string, AuthenticatedSocketUser> = {
+  "host-token": { id: "host-user", email: "host@example.com", username: "host", displayName: "Host" },
+  "guest-token": { id: "guest-user", email: "guest@example.com", username: "guest", displayName: "Guest" },
+  "intruder-token": { id: "intruder-user", email: "intruder@example.com", username: "intruder", displayName: "Intruder" },
+};
+
+const tokenVerifier: TokenVerifier = {
+  async verifyAccessToken(accessToken) {
+    const user = users[accessToken];
+    if (!user) throw new Error("Invalid token");
+    return user;
+  },
+};
 
 describe("Socket.IO origin configuration", () => {
   it("includes the local default and normalizes configured production origins", () => {
@@ -51,12 +67,12 @@ describe("Socket.IO game flow", () => {
 
   beforeEach(async () => {
     store = new GameStore();
-    service = createGameService(store, "https://ginrummy.jqiwen.com");
+    service = createGameService(store, "https://ginrummy.jqiwen.com", tokenVerifier);
     await new Promise<void>((resolve) => service.httpServer.listen(0, "127.0.0.1", resolve));
     const port = (service.httpServer.address() as AddressInfo).port;
     const url = `http://127.0.0.1:${port}`;
-    host = createClient(url, { transports: ["websocket"], forceNew: true });
-    guest = createClient(url, { transports: ["websocket"], forceNew: true });
+    host = createClient(url, { transports: ["websocket"], forceNew: true, auth: { accessToken: "host-token" } });
+    guest = createClient(url, { transports: ["websocket"], forceNew: true, auth: { accessToken: "guest-token" } });
     await Promise.all([once(host, "connect"), once(guest, "connect")]);
   });
 
@@ -126,6 +142,66 @@ describe("Socket.IO game flow", () => {
     } finally {
       rejectedClient.disconnect();
       warning.mockRestore();
+    }
+  });
+
+  it("allows guests to play the bot but rejects guest multiplayer rooms", async () => {
+    const port = (service.httpServer.address() as AddressInfo).port;
+    const anonymous = createClient(`http://127.0.0.1:${port}`, {
+      transports: ["websocket"],
+      forceNew: true,
+    });
+    await once(anonymous, "connect");
+    try {
+      const tutorial = await emitAck<Membership>(anonymous, "room:create", { bot: true });
+      expect(tutorial.success).toBe(true);
+      const online = await emitAck<Membership>(anonymous, "room:create", { bot: false });
+      expect(online).toMatchObject({ success: false, code: 401, message: "Authentication required" });
+    } finally {
+      anonymous.disconnect();
+    }
+  });
+
+  it("rejects invalid tokens during the Socket.IO handshake", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const port = (service.httpServer.address() as AddressInfo).port;
+    const invalid = createClient(`http://127.0.0.1:${port}`, {
+      transports: ["websocket"],
+      forceNew: true,
+      reconnection: false,
+      auth: { accessToken: "invalid-token" },
+    });
+    try {
+      const error = await once<Error>(invalid, "connect_error");
+      expect(error.message).toBe("Invalid or expired access token");
+      expect(warning).toHaveBeenCalledWith(
+        "[game-service] rejected unauthenticated Socket.IO handshake",
+        expect.stringContaining('"reason":"token_verification_failed"'),
+      );
+    } finally {
+      invalid.disconnect();
+      warning.mockRestore();
+    }
+  });
+
+  it("prevents another authenticated user from resuming an occupied identity", async () => {
+    const created = await emitAck<Membership>(host, "room:create", { bot: false });
+    const matchId = created.data!.matchId;
+    host.disconnect();
+
+    const port = (service.httpServer.address() as AddressInfo).port;
+    const url = `http://127.0.0.1:${port}`;
+    const intruder = createClient(url, { transports: ["websocket"], forceNew: true, auth: { accessToken: "intruder-token" } });
+    const returningHost = createClient(url, { transports: ["websocket"], forceNew: true, auth: { accessToken: "host-token" } });
+    await Promise.all([once(intruder, "connect"), once(returningHost, "connect")]);
+    try {
+      const denied = await emitAck<Membership>(intruder, "room:resume", { matchId, playerId: "1" });
+      expect(denied).toMatchObject({ success: false, code: 403 });
+      const resumed = await emitAck<Membership>(returningHost, "room:resume", { matchId, playerId: "1" });
+      expect(resumed.success).toBe(true);
+    } finally {
+      intruder.disconnect();
+      returningHost.disconnect();
     }
   });
 
