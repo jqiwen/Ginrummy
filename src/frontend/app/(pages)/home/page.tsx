@@ -20,7 +20,7 @@ import type { RootState } from "@shared-store/index";
 
 const gameModes = [
   {
-    href: "/game?roomId=tutorial",
+    href: "/game?mode=tutorial",
     title: "Tutorial",
     description: "Learn the dozenal Gin Rummy rules and controls.",
     icon: BookOpenText,
@@ -28,7 +28,7 @@ const gameModes = [
   {
     href: "/pvp",
     title: "Play with a Friend",
-    description: "Create or join a multiplayer room.",
+    description: "Invite a registered player to a private table.",
     icon: UsersRound,
     requiresAccount: true,
   },

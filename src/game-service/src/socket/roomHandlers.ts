@@ -103,9 +103,9 @@ export function registerRoomHandlers(
         throw new StoreError(1, "Invalid player");
       }
       store.requirePlayer(socket.id, matchId, payload.playerId, socket.data.user?.id);
-      store.leaveRoom(socket.id);
-      await socket.leave(matchId);
       socket.to(matchId).emit("room:player-left", { matchId, playerId: payload.playerId });
+      store.endRoom(matchId);
+      await io.in(matchId).socketsLeave(matchId);
       ack(ok(0, "Room left"));
     } catch (error) {
       handleError(socket, ack, error);

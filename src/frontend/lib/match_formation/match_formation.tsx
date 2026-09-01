@@ -14,7 +14,7 @@ export async function createRoom(): Promise<string | null> {
 }
 
 export interface JoinRoomResponse {
-  result: number;
+  result: number | string;
   message: string;
 }
 
@@ -36,7 +36,7 @@ export async function joinRoom(matchID: string): Promise<JoinRoomResponse> {
 export async function setGameStart(matchId: string) {
   try {
     const socket = await waitForGameSocket();
-    return new Promise<{ result: number; message: string }>((resolve) => {
+    return new Promise<{ result: number | string; message: string }>((resolve) => {
       socket.emit("game:start", { matchId, playerId: "1" }, (response) => {
         resolve({ result: response.code, message: response.message });
       });

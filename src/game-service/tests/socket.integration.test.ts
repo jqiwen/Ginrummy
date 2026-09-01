@@ -9,6 +9,7 @@ import { calculateRoundScore } from "../src/game/Scoring.js";
 import { DECK } from "../src/game/Card.js";
 import type { TokenVerifier } from "../src/auth/supabaseTokenVerifier.js";
 import type { AuthenticatedSocketUser } from "../src/types/socketEvents.js";
+import { InMemoryInviteRepository } from "../src/invites/inviteRepository.js";
 
 interface Response<T = never> {
   success: boolean;
@@ -67,7 +68,10 @@ describe("Socket.IO game flow", () => {
 
   beforeEach(async () => {
     store = new GameStore();
-    service = createGameService(store, "https://ginrummy.jqiwen.com", tokenVerifier);
+    const inviteRepository = new InMemoryInviteRepository(
+      Object.values(users).map(({ id, username, displayName }) => ({ id, username, displayName })),
+    );
+    service = createGameService(store, "https://ginrummy.jqiwen.com", tokenVerifier, inviteRepository);
     await new Promise<void>((resolve) => service.httpServer.listen(0, "127.0.0.1", resolve));
     const port = (service.httpServer.address() as AddressInfo).port;
     const url = `http://127.0.0.1:${port}`;

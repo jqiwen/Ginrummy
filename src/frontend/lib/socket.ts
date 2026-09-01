@@ -5,7 +5,7 @@ export type PlayerId = "0" | "1";
 
 export interface SocketResponse<T = never> {
   success: boolean;
-  code: number;
+  code: number | InviteErrorCode;
   message: string;
   data?: T;
 }
@@ -14,6 +14,48 @@ export interface RoomMembership {
   matchId: string;
   playerId: PlayerId;
   bot: boolean;
+}
+
+export type InviteErrorCode =
+  | "AUTH_REQUIRED"
+  | "PLAYER_NOT_FOUND"
+  | "CANNOT_INVITE_SELF"
+  | "INVITE_ALREADY_PENDING"
+  | "INVITE_RATE_LIMITED"
+  | "PLAYER_BUSY"
+  | "INVITE_NOT_FOUND"
+  | "INVITE_FORBIDDEN"
+  | "INVITE_ALREADY_PROCESSED"
+  | "INVITE_EXPIRED"
+  | "INTERNAL_ERROR";
+
+export type InviteStatus = "pending" | "accepted" | "declined" | "cancelled" | "expired";
+
+export interface PublicPlayerProfile {
+  id: string;
+  username: string;
+  displayName: string;
+}
+
+export interface GameInvite {
+  id: string;
+  sender: PublicPlayerProfile;
+  recipient: PublicPlayerProfile;
+  status: InviteStatus;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+export interface InviteLists {
+  received: GameInvite[];
+  sent: GameInvite[];
+}
+
+export interface InviteMatchReady {
+  inviteId: string | null;
+  membership: RoomMembership;
+  opponent: PublicPlayerProfile | null;
 }
 
 export interface DealState {
@@ -71,6 +113,13 @@ interface ClientToServerEvents {
   "game:knock": (payload: { matchId: string; playerId: PlayerId; round: number }, ack: (response: SocketResponse) => void) => void;
   "round:submit-result": (payload: { matchId: string; playerId: PlayerId; round: number; scoreSummary: ScoreSummary; winner: PlayerId }, ack: (response: SocketResponse) => void) => void;
   "round:ready-next": (payload: { matchId: string; playerId: PlayerId; round: number }, ack: (response: SocketResponse) => void) => void;
+  "player:search": (payload: { query: string }, ack: (response: SocketResponse<PublicPlayerProfile[]>) => void) => void;
+  "invite:list": (payload: Record<string, never>, ack: (response: SocketResponse<InviteLists>) => void) => void;
+  "invite:send": (payload: { recipientUsername: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
+  "invite:accept": (payload: { inviteId: string }, ack: (response: SocketResponse<InviteMatchReady>) => void) => void;
+  "invite:decline": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
+  "invite:cancel": (payload: { inviteId: string }, ack: (response: SocketResponse<GameInvite>) => void) => void;
+  "room:leave": (payload: { matchId: string; playerId: PlayerId }, ack: (response: SocketResponse) => void) => void;
 }
 
 interface ServerToClientEvents {
@@ -87,6 +136,12 @@ interface ServerToClientEvents {
   "round:result": (event: RoundResultEvent) => void;
   "round:both-ready": (event: { matchId: string; round: number }) => void;
   "game:error": (response: SocketResponse) => void;
+  "invite:received": (invite: GameInvite) => void;
+  "invite:accepted": (event: InviteMatchReady) => void;
+  "invite:declined": (invite: GameInvite) => void;
+  "invite:cancelled": (invite: GameInvite) => void;
+  "invite:expired": (invite: GameInvite) => void;
+  "match:ready": (event: InviteMatchReady) => void;
 }
 
 const gameServiceUrl = process.env.NEXT_PUBLIC_GAME_WS_URL ?? "http://localhost:8080";

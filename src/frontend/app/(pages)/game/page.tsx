@@ -7,6 +7,7 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { Button } from "@/components/ui/button";
 import DealCards from "@/lib/cards-play/deal-card-animation";
+import { useInvitations } from "@/lib/invites/invitation-provider";
 import { HeaderBar } from "@/lib/my-components/header-bar";
 import DozenalGinRummyRules from "@/lib/my-components/rule";
 import { publicAssetPath } from "@/lib/publicAsset";
@@ -24,10 +25,10 @@ const GAME_UI_HEIGHT = GAME_UI_WIDTH / BOARD_ASPECT_RATIO;
 
 function GameContent() {
   const searchParams = useSearchParams();
-  const fullRoomId = searchParams.get("roomId") ?? "tutorial";
-  const roomId = fullRoomId.split("-")[0];
-  const host = fullRoomId.split("-")[1] ?? "1";
-  const isTutorial = roomId === "tutorial";
+  const isTutorial = searchParams.get("mode") === "tutorial";
+  const { activeMatch } = useInvitations();
+  const roomId = isTutorial ? "tutorial" : activeMatch?.membership.matchId ?? "";
+  const host = isTutorial ? "1" : activeMatch?.membership.playerId ?? "1";
   const router = useRouter();
 
   const dispatch = useDispatch<AppDispatch>();
@@ -38,7 +39,7 @@ function GameContent() {
   const [boardScale, setBoardScale] = useState(1);
   const boardRef = useRef<HTMLDivElement>(null);
   const sidebarOpen = Boolean(game.showSideBar);
-  const canRenderGame = isTutorial || user.status === "authenticated";
+  const canRenderGame = isTutorial || (user.status === "authenticated" && Boolean(activeMatch));
 
   useEffect(() => {
     setUserName(user.displayName || user.username || "Guest");
@@ -81,7 +82,7 @@ function GameContent() {
   if (!canRenderGame) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#06110d] font-serif text-lg text-[#f5edd9]">
-        Restoring your seat…
+        {user.status === "authenticated" ? "Waiting for your private table…" : "Restoring your seat…"}
       </div>
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ExitIcon, InfoCircledIcon } from "@radix-ui/react-icons";
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { Bell, ChevronDown, LoaderCircle, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,8 +10,10 @@ import { useDispatch, useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { signOutUser } from "@/lib/auth/actions";
+import { useInvitations } from "@/lib/invites/invitation-provider";
 import { setGameSocketAccessToken } from "@/lib/socket";
 import type { AppDispatch, RootState } from "@shared-store/index";
 import { setGameStatus, type SideBarType } from "@shared-store/slices/game";
@@ -22,8 +24,11 @@ export function HeaderBar() {
   const router = useRouter();
   const user = useSelector((state: RootState) => state.user);
   const game = useSelector((state: RootState) => state.game);
+  const { received, acceptInvite, declineInvite, leaveActiveMatch } = useInvitations();
   const [openPauseDialog, setOpenPauseDialog] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
+  const [inviteAction, setInviteAction] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const rawPathname = usePathname();
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -51,6 +56,26 @@ export function HeaderBar() {
 
   function changeShowSideBar(state: SideBarType) {
     dispatch(setGameStatus({ showSideBar: game.showSideBar === state ? null : state }));
+  }
+
+  async function updateInvite(inviteId: string, action: "accept" | "decline") {
+    if (inviteAction) return;
+    setInviteAction(inviteId);
+    setInviteError(null);
+    try {
+      if (action === "accept") await acceptInvite(inviteId);
+      else await declineInvite(inviteId);
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "Invitation update failed.");
+    } finally {
+      setInviteAction(null);
+    }
+  }
+
+  async function handleLeaveGame() {
+    await leaveActiveMatch();
+    setOpenPauseDialog(false);
+    router.push("/home");
   }
 
   return (
@@ -88,6 +113,21 @@ export function HeaderBar() {
           </>
         )}
         {user.status === "authenticated" && (
+          <>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="icon" variant="ghost" className={`${surfaceButtonClass} relative`} aria-label={`${received.length} pending game invitation${received.length === 1 ? "" : "s"}`}>
+                <Bell className="h-4 w-4" />
+                {received.length > 0 && <span className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c6a354] px-1 text-[9px] font-black text-[#102018]">{Math.min(received.length, 9)}</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 border-[#aa9159]/35 bg-[#0b2118] p-3 text-[#eee4cb]">
+              <div className="flex items-center justify-between"><p className="font-serif text-lg font-semibold text-[#fff4d5]">Game invitations</p>{received.length > 0 && <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#cbb270]">{received.length} pending</span>}</div>
+              {received.length === 0 ? <p className="py-5 text-sm text-[#d8d1bf]/50">No invitations waiting.</p> : <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">{received.map((invite) => <li key={invite.id} className="rounded-sm border border-[#aa9159]/25 bg-[#06110d]/55 p-3"><p className="text-sm"><span className="font-semibold text-[#fff4d5]">{invite.sender.username}</span> invited you to play.</p><div className="mt-2 flex justify-end gap-2"><Button size="sm" variant="ghost" disabled={Boolean(inviteAction)} className="h-7 px-2 text-xs text-[#d8d1bf]/65 hover:bg-red-950/30 hover:text-[#ffb4a7]" onClick={() => void updateInvite(invite.id, "decline")}>Decline</Button><Button size="sm" disabled={Boolean(inviteAction)} className="h-7 rounded-sm bg-[#c6a354] px-2 text-xs font-bold text-[#102018] hover:bg-[#d8ba70]" onClick={() => void updateInvite(invite.id, "accept")}>{inviteAction === invite.id && <LoaderCircle className="mr-1 h-3 w-3 animate-spin" />}Accept</Button></div></li>)}</ul>}
+              {inviteError && <p role="alert" className="mt-2 text-xs text-[#ffb4a7]">{inviteError}</p>}
+              <Button asChild variant="ghost" size="sm" className="mt-2 w-full text-[#d8d1bf]/65 hover:bg-[#d0b36d]/10 hover:text-[#fff4d6]"><Link href="/pvp">Open private match</Link></Button>
+            </PopoverContent>
+          </Popover>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className={`${surfaceButtonClass} h-10 gap-2 px-2`}>
@@ -103,13 +143,14 @@ export function HeaderBar() {
               <DropdownMenuItem onSelect={() => void handleLogout()} className="focus:bg-[#d0b36d]/15 focus:text-[#fff6dc]"><LogOut className="mr-2 h-4 w-4" />Sign out</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </>
         )}
       </div>
 
       <Dialog open={openPauseDialog} onOpenChange={setOpenPauseDialog}>
         <DialogContent onInteractOutside={(event) => event.preventDefault()} className="w-auto p-6">
           <DialogHeader><DialogTitle>Leave the game</DialogTitle><DialogDescription>Your current round will not be saved.</DialogDescription></DialogHeader>
-          <div className="mt-4 flex w-[300px] flex-col gap-3"><Button asChild><Link href="/home">Leave game</Link></Button><Button variant="ghost" onClick={() => setOpenPauseDialog(false)}>Cancel</Button></div>
+          <div className="mt-4 flex w-[300px] flex-col gap-3"><Button onClick={() => void handleLeaveGame()}>Leave game</Button><Button variant="ghost" onClick={() => setOpenPauseDialog(false)}>Cancel</Button></div>
         </DialogContent>
       </Dialog>
     </header>

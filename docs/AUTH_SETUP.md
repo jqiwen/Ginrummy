@@ -6,7 +6,7 @@ The application code is complete, but authentication will not work in a deployed
 
 In the [Supabase dashboard](https://supabase.com/dashboard), create a project or select the project that should own Gin Rummy accounts. User credentials live in Supabase Auth; public game identity lives in `public.profiles`.
 
-## 2. Apply the profile migration
+## 2. Apply the database migrations
 
 This step is mandatory for every new Supabase project. A local migration file does not modify the remote database by itself.
 
@@ -14,19 +14,24 @@ Open the dashboard and follow this exact path:
 
 **Supabase → Ginrummy project → SQL Editor → New query → paste the complete migration → Run**
 
-Use the complete contents of:
+Run the complete contents of both files in this order:
 
 ```text
 supabase/migrations/202608310001_create_profiles.sql
+supabase/migrations/202608310002_create_game_invites.sql
 ```
 
-Alternatively, link the repository with the Supabase CLI and run `supabase db push`. The migration creates:
+Alternatively, link the repository with the Supabase CLI and run `supabase db push`. The migrations create:
 
 - `public.profiles`, keyed by the UUID from `auth.users`
 - database-enforced, case-normalized unique usernames
 - row-level security for public profile reads and owner-only updates
 - a trigger that creates a profile from signup metadata
 - an `updated_at` trigger
+- persistent `public.game_invites` rows with a 30-minute expiration
+- RLS that exposes an invite only to its sender and recipient
+- narrow authenticated functions for send, accept, decline, cancel, and lazy expiration
+- a partial unique index that prevents duplicate pending invitations between the same two players
 
 The trigger intentionally rejects invalid or duplicate usernames at the database boundary. If it fails, Supabase rejects the related signup instead of creating an auth user without a profile.
 
@@ -95,7 +100,7 @@ The Pages workflow compiles these into the static browser bundle. The Cloud Run 
 
 ## 7. Deploy in order
 
-1. Apply the SQL migration.
+1. Apply both SQL migrations in filename order.
 2. Configure Email/Password and the URL allowlist.
 3. Add the two repository variables.
 4. Run **Deploy game service to Cloud Run** so the service can verify access tokens.
@@ -108,8 +113,9 @@ The existing Cloud Run deployment command supplies the backend environment value
 1. Register a new username and email.
 2. If confirmation is enabled, follow the email link and sign in.
 3. Confirm the header shows the profile display name after a refresh.
-4. Open PvP and create a room.
-5. Sign in as a second user in a separate browser profile and join the room.
-6. Sign out and confirm PvP redirects back to login while the guest tutorial remains available.
+4. Open Private Match, search for the second account by username, and send an invite.
+5. Sign in as that second user in a separate browser profile, accept the invite, and confirm both sessions enter the same match automatically.
+6. Refresh one match session and confirm its authenticated seat reconnects without entering a room code.
+7. Sign out and confirm Private Match redirects back to login while the guest tutorial remains available.
 
 If signup fails with a generic account error, check Supabase Auth logs and confirm the migration ran successfully. A missing `profiles` table or profile trigger will deliberately prevent an incomplete account from being used.

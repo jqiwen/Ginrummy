@@ -2,6 +2,7 @@
 
 import { Provider } from 'react-redux';
 import { AuthSessionProvider } from '@/lib/auth/auth-session-provider';
+import { InvitationProvider } from '@/lib/invites/invitation-provider';
 import store from './store'
 
 interface ClientProviderProps {
@@ -11,7 +12,9 @@ interface ClientProviderProps {
 const ClientProvider: React.FC<ClientProviderProps> = ({ children }) => {
   return (
     <Provider store={store}>
-      <AuthSessionProvider>{children}</AuthSessionProvider>
+      <AuthSessionProvider>
+        <InvitationProvider>{children}</InvitationProvider>
+      </AuthSessionProvider>
     </Provider>
   );
 };

@@ -14,7 +14,7 @@ Welcome to "Gin Rummy, With a Twist"! This project is a digital recreation of th
 ## Features
 - **Dozenal Game Logic**: Play using a base-twelve scoring system, offering a fresh take on Gin Rummy strategies.
 - **Interactive Gameplay**: Smooth animations for dealing and sorting cards, responsive card interactions, and clear game state updates.
-- **Multiplayer Support**: Engage in matches with other players through online matchmaking or by inviting friends.
+- **Multiplayer Support**: Search registered usernames, send persistent invitations, and enter accepted private matches automatically.
 - **Persistent Player Identity**: Supabase email/password accounts and database-backed public profiles secure online multiplayer seats.
 - **Cross-Platform Compatibility**: Enjoy the game on desktop, mobile, and tablet with a responsive Next.js UI and a real-time Node.js game service.
 
@@ -26,11 +26,11 @@ Welcome to "Gin Rummy, With a Twist"! This project is a digital recreation of th
 
 ## Authentication architecture
 
-Supabase Auth is the only credential authority. The static frontend restores Supabase sessions, loads the matching `profiles` row, and keeps only presentation-safe identity state in Redux. It sends the current access token through the shared Socket.IO handshake; Cloud Run validates that token with Supabase and binds the verified `auth.users` UUID to each online room seat. Passwords and access tokens are never stored in Redux or the game service.
+Supabase Auth is the only credential authority. The static frontend restores Supabase sessions, loads the matching `profiles` row, and keeps only presentation-safe identity state in Redux. It sends the current access token through the shared Socket.IO handshake; Cloud Run validates that token with Supabase and uses the verified `auth.users` UUID for player search, invitations, room seats, and reconnects. Passwords are never sent to the game service, and access tokens are never placed in Redux or persistent server storage; the verified token is retained only for the live socket so database calls remain scoped by Supabase RLS.
 
-Guest users can use public pages and play the bot tutorial. Creating, joining, resuming, or playing an online room requires a verified account on both the client and service boundaries.
+Guest users can use public pages and play the bot tutorial. Searching players, sending or acting on invites, and playing a private online match require a verified account on both the client and service boundaries. Invitations persist in Supabase; live card state remains in the single Cloud Run instance.
 
-Apply the included profile migration and complete the one-time project settings in [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md) before testing real accounts.
+Apply the included profile and invitation migrations and complete the one-time project settings in [docs/AUTH_SETUP.md](docs/AUTH_SETUP.md) before testing real accounts.
 
 ## Run locally
 
@@ -73,10 +73,10 @@ Backend:  GitHub -> npm ci -> tests -> TypeScript build -> Google WIF auth
 
 `.github/workflows/deploy-game-service.yml` runs for game-service changes. It validates all deployment variables, runs tests and the TypeScript build, authenticates through Workload Identity Federation, pushes an immutable image tagged with the commit SHA, deploys a no-traffic candidate, verifies HTTP health and a direct Socket.IO WebSocket connection, and then promotes the verified revision.
 
-The static game route remains compatible with GitHub Pages:
+The static game route remains compatible with GitHub Pages while the internal room UUID stays out of the address bar:
 
 ```text
-/game?roomId=<ROOM_ID>-<PLAYER_ID>
+/game
 ```
 
 ## Required GitHub repository variables
@@ -133,7 +133,7 @@ The deployment keeps port `8080`, request timeout `3600`, `min instances = 0`, a
 
 Rooms and match state are currently stored in one process's memory. Production must remain at one maximum instance until shared state such as Redis is added; otherwise players in the same room could reach different in-memory maps.
 
-For a production multiplayer check, open `https://ginrummy.jqiwen.com` in two browser sessions and verify create/join, deal, draw, discard, turn changes, knock, scoring, round synchronization, and reconnection.
+For a production multiplayer check, open `https://ginrummy.jqiwen.com` in two browser sessions, sign in as different registered users, search/invite/accept, and verify automatic seating, deal, draw, discard, turn changes, knock, scoring, round synchronization, and identity-based reconnection.
 
 ## Acknowledgments
 Special thanks to Professor Paul Rapoport for his guidance on game rules and mechanics, and to all team members for their hard work in bringing this project to life.

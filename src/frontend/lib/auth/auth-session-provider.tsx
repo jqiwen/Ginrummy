@@ -17,6 +17,7 @@ function metadataString(value: unknown): string | undefined {
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
   const dispatch = useDispatch<AppDispatch>();
   const previousUserId = useRef<string | null>(null);
+  const previousAccessToken = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -25,9 +26,12 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     const applySession = async (session: Session | null) => {
       const currentRevision = ++revision;
       const nextUserId = session?.user.id ?? null;
+      const nextAccessToken = session?.access_token ?? null;
       const identityChanged = previousUserId.current !== nextUserId;
+      const tokenChanged = previousAccessToken.current !== nextAccessToken;
       previousUserId.current = nextUserId;
-      setGameSocketAccessToken(session?.access_token ?? null, identityChanged);
+      previousAccessToken.current = nextAccessToken;
+      setGameSocketAccessToken(nextAccessToken, identityChanged || tokenChanged);
 
       if (!session) {
         if (active) dispatch(setUnauthenticated());

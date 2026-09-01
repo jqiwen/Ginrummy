@@ -1,8 +1,9 @@
 'use client';
 
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
 import { formatDozenal } from "../game/rules";
+import { useInvitations } from "../invites/invitation-provider";
+import { useRouter } from "next/navigation";
 
 interface ScoreRound {
   round: number;
@@ -34,6 +35,18 @@ export default function GameOverOverlay({
   scoreSummary,
   roomId,
 }: GameOverOverlayProps) {
+  const { leaveActiveMatch } = useInvitations();
+  const router = useRouter();
+
+  async function returnHome() {
+    if (onReturn) {
+      onReturn();
+      return;
+    }
+    if (roomId !== "tutorial") await leaveActiveMatch();
+    router.push("/home");
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] bg-black bg-opacity-80 flex flex-col items-center justify-center text-white text-center px-4 pointer-events-auto overflow-y-auto">
       <h1 className="text-5xl font-extrabold mb-6 animate-bounce">
@@ -92,17 +105,7 @@ export default function GameOverOverlay({
 
       {/* 返回按钮 */}
       <div className="mt-6">
-        {onReturn ? (
-          <Button className="w-[300px]" onClick={onReturn}>
-            Return to Home
-          </Button>
-        ) : (
-          <Link href="/home" passHref legacyBehavior>
-            <a className="block w-[300px]">
-              <Button className="w-full">Return to Home</Button>
-            </a>
-          </Link>
-        )}
+        <Button className="w-[300px]" onClick={() => void returnHome()}>Return to Home</Button>
       </div>
     </div>
   );

@@ -3,7 +3,9 @@ import { createServer as createHttpServer, type Server as HttpServer } from "nod
 import { pathToFileURL } from "node:url";
 import { Server } from "socket.io";
 import { createSupabaseTokenVerifier, type TokenVerifier } from "./auth/supabaseTokenVerifier.js";
+import { createSupabaseInviteRepository, type InviteRepository } from "./invites/inviteRepository.js";
 import { registerGameHandlers } from "./socket/gameHandlers.js";
+import { registerInviteHandlers, userChannel } from "./socket/inviteHandlers.js";
 import { registerRoomHandlers } from "./socket/roomHandlers.js";
 import { GameStore, gameStore } from "./state/gameStore.js";
 import type {
@@ -32,6 +34,7 @@ export function createGameService(
   store: GameStore = gameStore,
   configuredOrigins = process.env.FRONTEND_ORIGIN ?? "",
   tokenVerifier: TokenVerifier = createSupabaseTokenVerifier(),
+  inviteRepository: InviteRepository = createSupabaseInviteRepository(),
 ): GameService {
   const httpServer = createHttpServer((request, response) => {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -88,6 +91,7 @@ export function createGameService(
 
     try {
       socket.data.user = await tokenVerifier.verifyAccessToken(accessToken);
+      socket.data.accessToken = accessToken;
       next();
     } catch {
       console.warn(
@@ -112,6 +116,24 @@ export function createGameService(
     });
     registerRoomHandlers(io, socket, store);
     registerGameHandlers(io, socket, store);
+    registerInviteHandlers(io, socket, inviteRepository, store);
+
+    const user = socket.data.user;
+    if (user) {
+      void (async () => {
+        await socket.join(userChannel(user.id));
+        const active = store.resumeActiveRoom(user.id, socket.id);
+        if (!active) return;
+        socket.data.matchId = active.matchId;
+        socket.data.playerId = active.playerId;
+        await socket.join(active.matchId);
+        socket.emit("match:ready", {
+          inviteId: null,
+          membership: { ...active, bot: false },
+          opponent: null,
+        });
+      })();
+    }
   });
 
   return { httpServer, io };

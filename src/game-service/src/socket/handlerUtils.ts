@@ -4,6 +4,7 @@ import type {
   Ack,
   ClientToServerEvents,
   InterServerEvents,
+  InviteErrorCode,
   ServerToClientEvents,
   SocketData,
   SocketResponse,
@@ -24,16 +25,25 @@ export function ok<T>(code = 0, message = "OK", data?: T): SocketResponse<T> {
     : { success: true, code, message, data };
 }
 
-export function failure(code: number, message: string): SocketResponse {
+export function failure(code: number | InviteErrorCode, message: string): SocketResponse {
   return { success: false, code, message };
 }
 
 export function handleError<T>(socket: GameSocket, ack: Ack<T>, error: unknown): void {
-  const response = error instanceof StoreError
+  const response = error instanceof StoreError || error instanceof ServiceError
     ? failure(error.code, error.message)
-    : failure(1, error instanceof Error ? error.message : "Unexpected game service error");
+    : failure("INTERNAL_ERROR", "Unexpected game service error");
   ack(response);
   socket.emit("game:error", response);
+}
+
+export class ServiceError extends Error {
+  constructor(
+    readonly code: InviteErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

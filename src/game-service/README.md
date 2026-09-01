@@ -2,7 +2,7 @@
 
 This is the in-memory, server-authoritative real-time backend for the existing Next.js Gin Rummy UI. It ports the former Python `Match`, `Bot`, dozenal deck, room, pass, auth, and round synchronization behavior to strict TypeScript and Socket.IO. It also mirrors the existing meld, deadwood, lay-off, and round-scoring functions so submitted results are verified against server-owned hands.
 
-Socket.IO accepts WebSocket transport only. A match ID is also the Socket.IO room name. Game state intentionally remains in memory for this migration phase.
+Socket.IO accepts WebSocket transport only. Accepted invitations receive an internal match UUID, which also becomes the Socket.IO room name. Game state intentionally remains in memory, while invitations persist in Supabase.
 
 ## Run locally
 
@@ -25,13 +25,14 @@ npm test
 
 ## Flow
 
-1. A client creates or joins a room and the socket joins the match ID.
-2. `game:start` is broadcast immediately to both players.
-3. The dealer sends `round:start`; the service deals one player-specific state payload to each socket.
-4. Draw requests are acknowledged only after server-side validation.
-5. A discard commits the move and pushes `game:opponent-action` to the other player. Bot turns use the same event.
-6. Knock results are recomputed from server-owned hands before the score is broadcast.
-7. Pass, next-round readiness, and disconnect changes are pushed to the room instead of polled.
+1. An authenticated player searches public profiles by username and sends a persistent invite.
+2. The recipient accepts; Supabase atomically marks the invite accepted and generates the internal room UUID.
+3. The service binds both verified user UUIDs to seats, joins their active sockets, and emits `match:ready`.
+4. The dealer sends `round:start`; the service deals one player-specific state payload to each socket.
+5. Draw requests are acknowledged only after server-side validation.
+6. A discard commits the move and pushes `game:opponent-action` to the other player. Bot turns use the same event.
+7. Knock results are recomputed from server-owned hands before the score is broadcast.
+8. Pass, next-round readiness, disconnect, and user-ID reconnect changes are pushed instead of polled.
 
 The full Flask endpoint mapping is in [`../../docs/MIGRATION_MAPPING.md`](../../docs/MIGRATION_MAPPING.md).
 

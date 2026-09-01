@@ -54,6 +54,7 @@ export class StoreError extends Error {
 export class GameStore {
   private readonly rooms = new Map<string, RoomState>();
   private readonly memberships = new Map<string, SocketMembership>();
+  private readonly userRooms = new Map<string, SocketMembership>();
 
   createRoom(bot: boolean, socketId: string, userId?: string): RoomState {
     const matchId = this.generateMatchId(bot);
@@ -81,6 +82,43 @@ export class GameStore {
     };
     this.rooms.set(matchId, room);
     this.memberships.set(socketId, { matchId, playerId: "1" });
+    if (userId) this.userRooms.set(userId, { matchId, playerId: "1" });
+    return room;
+  }
+
+  createInvitedRoom(senderUserId: string, recipientUserId: string, internalMatchId?: string): RoomState {
+    if (senderUserId === recipientUserId) {
+      throw new StoreError(1, "A private match requires two players");
+    }
+    if (this.findActiveMembershipByUserId(senderUserId) || this.findActiveMembershipByUserId(recipientUserId)) {
+      throw new StoreError(409, "A player is already in an active match");
+    }
+
+    const matchId = internalMatchId ?? this.generateMatchId(false);
+    if (this.rooms.has(matchId)) {
+      throw new StoreError(409, "Private match already exists");
+    }
+    const room: RoomState = {
+      matchId,
+      bot: false,
+      match: new Match(matchId, false),
+      players: {
+        "1": { isBot: false, userId: senderUserId },
+        "0": { isBot: false, userId: recipientUserId },
+      },
+      started: true,
+      phase: "waiting-deal",
+      dealer: "1",
+      turn: "1",
+      initialPlayer: "1",
+      passed: new Set<PlayerId>(),
+      scoreSummary: null,
+      roundResults: new Map<number, RoundResult>(),
+      readyNextRound: new Map<number, Set<PlayerId>>(),
+    };
+    this.rooms.set(matchId, room);
+    this.userRooms.set(senderUserId, { matchId, playerId: "1" });
+    this.userRooms.set(recipientUserId, { matchId, playerId: "0" });
     return room;
   }
 
@@ -91,6 +129,7 @@ export class GameStore {
     }
     room.players["0"] = { isBot: false, socketId, userId };
     this.memberships.set(socketId, { matchId, playerId: "0" });
+    this.userRooms.set(userId, { matchId, playerId: "0" });
     return room;
   }
 
@@ -108,7 +147,15 @@ export class GameStore {
     }
     player.socketId = socketId;
     this.memberships.set(socketId, { matchId, playerId });
+    if (userId) this.userRooms.set(userId, { matchId, playerId });
     return room;
+  }
+
+  resumeActiveRoom(userId: string, socketId: string): SocketMembership | undefined {
+    const membership = this.findActiveMembershipByUserId(userId);
+    if (!membership) return undefined;
+    this.resumeRoom(membership.matchId, membership.playerId, socketId, userId);
+    return membership;
   }
 
   leaveRoom(socketId: string): SocketMembership | undefined {
@@ -119,10 +166,31 @@ export class GameStore {
     const room = this.rooms.get(membership.matchId);
     const player = room?.players[membership.playerId];
     if (player && !player.isBot && player.socketId === socketId) {
-      delete player.socketId;
+      const fallback = [...this.memberships.entries()].find(
+        ([candidateSocketId, candidate]) => candidateSocketId !== socketId
+          && candidate.matchId === membership.matchId
+          && candidate.playerId === membership.playerId,
+      );
+      if (fallback) player.socketId = fallback[0];
+      else delete player.socketId;
     }
     this.memberships.delete(socketId);
     return membership;
+  }
+
+  endRoom(matchId: string): void {
+    const room = this.rooms.get(matchId);
+    if (!room) return;
+    for (const player of Object.values(room.players)) {
+      if (player?.userId) {
+        const active = this.userRooms.get(player.userId);
+        if (active?.matchId === matchId) this.userRooms.delete(player.userId);
+      }
+    }
+    for (const [socketId, membership] of this.memberships) {
+      if (membership.matchId === matchId) this.memberships.delete(socketId);
+    }
+    this.rooms.delete(matchId);
   }
 
   getRoom(matchId: string): RoomState {
@@ -139,6 +207,18 @@ export class GameStore {
 
   getMembership(socketId: string): SocketMembership | undefined {
     return this.memberships.get(socketId);
+  }
+
+  findActiveMembershipByUserId(userId: string): SocketMembership | undefined {
+    const membership = this.userRooms.get(userId);
+    if (!membership) return undefined;
+    const room = this.rooms.get(membership.matchId);
+    const player = room?.players[membership.playerId];
+    if (!room || !player || player.userId !== userId) {
+      this.userRooms.delete(userId);
+      return undefined;
+    }
+    return { ...membership };
   }
 
   requirePlayer(socketId: string, matchId: string, playerId: PlayerId, userId?: string): RoomState {
