@@ -75,7 +75,7 @@ describe("registration identity checks", () => {
     expect(signUp).not.toHaveBeenCalled();
     expect(consoleError).toHaveBeenCalledWith(
       "[auth] Unexpected Supabase error",
-      { operation: "player_id_availability_network" },
+      { operation: "player_id_availability_network", message: "fetch failed" },
     );
   });
 
@@ -88,14 +88,38 @@ describe("registration identity checks", () => {
   });
 
   it("maps a profile uniqueness race to the friendly User ID error", async () => {
-    mockSupabase({ signupError: { code: "23505", message: "PLAYER_ID_TAKEN duplicate key" } });
+    mockSupabase({
+      signupError: {
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "profiles_player_id_unique": PLAYER_ID_TAKEN',
+      },
+    });
     await expect(signUpWithEmail(values)).rejects.toMatchObject({
       code: "player_id_exists",
       message: "This User ID is already taken.",
     });
   });
 
-  it("normalizes signup identity and sends no display name or public email metadata", async () => {
+  it("does not misreport an unrelated profile-trigger failure as a duplicate User ID", async () => {
+    mockSupabase({
+      signupError: { code: "unexpected_failure", message: "Database error saving new user" },
+    });
+
+    await expect(signUpWithEmail(values)).rejects.toMatchObject({
+      code: "unavailable",
+      message: "Unable to create your account. Please try again.",
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[auth] Unexpected Supabase error",
+      {
+        operation: "auth_signup_profile_trigger",
+        code: "unexpected_failure",
+        message: "Database error saving new user",
+      },
+    );
+  });
+
+  it("allows an empty profiles lookup and submits the normalized player_id", async () => {
     const { signUp } = mockSupabase({});
     await expect(signUpWithEmail(values)).resolves.toMatchObject({ email: "player@example.com", session: null });
     expect(signUp).toHaveBeenCalledWith({

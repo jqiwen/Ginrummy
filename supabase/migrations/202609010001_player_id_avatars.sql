@@ -19,20 +19,6 @@ $$;
 alter table public.profiles
   add column if not exists avatar_path text;
 
--- display_name may still exist as a legacy NOT NULL column from the original
--- schema. Current code no longer reads or writes it, so allow new rows to leave
--- it null without dropping the column or any existing values.
-do $$
-begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'profiles' and column_name = 'display_name'
-  ) then
-    alter table public.profiles alter column display_name drop not null;
-  end if;
-end;
-$$;
-
 -- The previous schema already prevented case-only duplicates. Normalize the
 -- preserved values before installing the renamed constraints.
 update public.profiles
@@ -42,7 +28,6 @@ where player_id is distinct from lower(trim(player_id));
 alter table public.profiles drop constraint if exists profiles_username_length;
 alter table public.profiles drop constraint if exists profiles_username_format;
 alter table public.profiles drop constraint if exists profiles_username_normalized;
-alter table public.profiles drop constraint if exists profiles_display_name_length;
 alter table public.profiles drop constraint if exists profiles_player_id_length;
 alter table public.profiles drop constraint if exists profiles_player_id_format;
 alter table public.profiles drop constraint if exists profiles_player_id_normalized;
@@ -81,8 +66,11 @@ grant update (avatar_path) on table public.profiles to authenticated;
 revoke select on table public.profiles from anon, authenticated;
 grant select (id, player_id, avatar_path) on table public.profiles to anon, authenticated;
 
--- New signups use player_id metadata. The username fallback only supports an
--- already-open registration page during a rolling deployment.
+-- New signups use player_id metadata. display_name remains populated for
+-- compatibility with the original profiles schema, where it is NOT NULL, but
+-- the application exposes player_id as the only public identity. The username
+-- fallback only supports an already-open registration page during a rolling
+-- deployment.
 create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
@@ -101,8 +89,8 @@ begin
     requested_player_id := 'player_' || substr(replace(new.id::text, '-', ''), 1, 12);
   end if;
 
-  insert into public.profiles (id, player_id, avatar_path)
-  values (new.id, requested_player_id, null);
+  insert into public.profiles (id, player_id, display_name, avatar_path)
+  values (new.id, requested_player_id, requested_player_id, null);
   return new;
 exception
   when unique_violation then

@@ -26,7 +26,13 @@ describe("Player ID and avatar database migration", () => {
     expect(migration).toMatch(/grant update \(avatar_path\) on table public\.profiles to authenticated/i);
     expect(migration).toMatch(/grant select \(id, player_id, avatar_path\) on table public\.profiles to anon, authenticated/i);
     expect(migration).not.toMatch(/add column if not exists email/i);
-    expect(migration).toMatch(/alter column display_name drop not null/i);
+  });
+
+  it("creates profiles with player_id and satisfies the legacy display_name requirement", () => {
+    expect(migration).not.toMatch(/alter column display_name drop not null/i);
+    expect(migration).toMatch(
+      /insert into public\.profiles \(id, player_id, display_name, avatar_path\)\s+values \(new\.id, requested_player_id, requested_player_id, null\)/i,
+    );
   });
 
   it("creates a public avatars bucket with owner-folder write policies", () => {

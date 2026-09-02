@@ -56,12 +56,21 @@ function profilesTableIsUnavailable(error: unknown): boolean {
         || normalizedMessage.includes("could not find the table")));
 }
 
+function isPlayerIdConflict(error: unknown): boolean {
+  const { code, message } = supabaseErrorDetails(error);
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("player_id_taken")
+    || normalizedMessage.includes("profiles_player_id_unique")
+    || (code === "23505" && normalizedMessage.includes("player_id"));
+}
+
 function logDevelopmentAuthError(operation: string, error?: unknown): void {
   if (process.env.NODE_ENV === "production") return;
-  const { code } = supabaseErrorDetails(error);
+  const { code, message } = supabaseErrorDetails(error);
   console.error("[auth] Unexpected Supabase error", {
     operation,
     ...(code ? { code } : {}),
+    ...(message ? { message } : {}),
   });
 }
 
@@ -155,17 +164,14 @@ export async function signUpWithEmail(values: SignupValues): Promise<SignupResul
     if (message.includes("already registered") || message.includes("already exists")) {
       throw new AuthUiError("An account with this email already exists. Try signing in instead.", "email_exists");
     }
-    if (message.includes("player_id_taken") || message.includes("duplicate") || message.includes("user id")) {
+    if (isPlayerIdConflict(error)) {
       throw new AuthUiError("This User ID is already taken.", "player_id_exists");
     }
     if (message.includes("database error") || message.includes("saving new user")) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error("[auth] Supabase profile creation failed during signup. Check that the auth database migration and profile trigger are applied.");
-      }
-      throw new AuthUiError("This User ID is already taken. Choose another User ID and try again.", "player_id_exists");
-    } else {
-      logDevelopmentAuthError("auth_signup", error);
+      logDevelopmentAuthError("auth_signup_profile_trigger", error);
+      throw new AuthUiError("Unable to create your account. Please try again.", "unavailable");
     }
+    logDevelopmentAuthError("auth_signup", error);
     throw new AuthUiError("Unable to create your account. Please try again.", "unavailable");
   }
 
