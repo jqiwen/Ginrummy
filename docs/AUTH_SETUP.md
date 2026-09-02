@@ -63,6 +63,7 @@ http://localhost:3000/**
 ```
 
 The `/**` patterns allow the static export's trailing-slash routes, including `/login/`.
+Production signups generate the exact confirmation destination `https://ginrummy.jqiwen.com/login/?confirmed=1`.
 
 This Dashboard change is manual. Codex cannot change the Supabase project settings. Follow the exact path:
 
@@ -101,17 +102,18 @@ Open **GitHub → Repository → Settings → Secrets and variables → Actions 
 
 | Variable | Value |
 | --- | --- |
+| `NEXT_PUBLIC_GAME_WS_URL` | Cloud Run HTTPS service origin |
 | `NEXT_PUBLIC_SITE_URL` | `https://ginrummy.jqiwen.com` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public anon/publishable key |
 
-The Pages workflow compiles these into the static browser bundle. `NEXT_PUBLIC_SITE_URL` controls the email-confirmation destination; production must use `https://ginrummy.jqiwen.com`. The Cloud Run workflow maps the Supabase repository variables to `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the game-service revision. This avoids maintaining duplicate Supabase values.
+The Pages workflow compiles these four values into the static browser bundle. `NEXT_PUBLIC_GAME_WS_URL` must be the Cloud Run HTTPS service origin. `NEXT_PUBLIC_SITE_URL` controls the email-confirmation destination and must be `https://ginrummy.jqiwen.com`. The Cloud Run workflow maps the same two Supabase repository variables to `SUPABASE_URL` and `SUPABASE_ANON_KEY` on the game-service revision, avoiding duplicate names.
 
 ## 7. Deploy in order
 
 1. Apply all SQL migrations in filename order.
 2. Configure Email/Password and the URL allowlist.
-3. Add the three frontend repository variables.
+3. Add the four shared/frontend repository variables above and the seven Cloud Run variables in [CICD_SETUP.md](CICD_SETUP.md).
 4. Run **Deploy game service to Cloud Run** so the service can verify access tokens.
 5. Run **Deploy frontend to GitHub Pages** so the static bundle receives the public Supabase configuration.
 

@@ -24,7 +24,9 @@ describe("Player ID and avatar database migration", () => {
   it("keeps email out of profiles and limits profile writes to avatar_path", () => {
     expect(migration).toMatch(/add column if not exists avatar_path text/i);
     expect(migration).toMatch(/grant update \(avatar_path\) on table public\.profiles to authenticated/i);
+    expect(migration).toMatch(/grant select \(id, player_id, avatar_path\) on table public\.profiles to anon, authenticated/i);
     expect(migration).not.toMatch(/add column if not exists email/i);
+    expect(migration).toMatch(/alter column display_name drop not null/i);
   });
 
   it("creates a public avatars bucket with owner-folder write policies", () => {

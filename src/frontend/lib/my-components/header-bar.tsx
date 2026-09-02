@@ -32,6 +32,7 @@ export function HeaderBar() {
   const [leaveError, setLeaveError] = useState<string | null>(null);
   const [inviteAction, setInviteAction] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [authControlsMounted, setAuthControlsMounted] = useState(false);
 
   const rawPathname = usePathname();
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -44,6 +45,12 @@ export function HeaderBar() {
     document.body.classList.toggle("overflow-hidden", openPauseDialog);
     return () => document.body.classList.remove("overflow-hidden");
   }, [openPauseDialog]);
+
+  useEffect(() => {
+    setAuthControlsMounted(true);
+  }, []);
+
+  const visibleAuthStatus = authControlsMounted ? user.status : "initializing";
 
   async function handleLogout() {
     setLogoutError(false);
@@ -117,14 +124,14 @@ export function HeaderBar() {
 
       <div className="flex h-10 min-w-[154px] items-center justify-end gap-1.5">
         {logoutError && <span role="alert" className="hidden text-xs text-[#ffb4a7] sm:inline">Sign out failed</span>}
-        {user.status === "initializing" && <div aria-label="Restoring session" className="h-8 w-28 animate-pulse rounded-sm border border-[#9c8248]/20 bg-[#d0b36d]/10" />}
-        {user.status === "unauthenticated" && (
+        {visibleAuthStatus === "initializing" && <div aria-label="Restoring session" className="h-8 w-28 animate-pulse rounded-sm border border-[#9c8248]/20 bg-[#d0b36d]/10" />}
+        {visibleAuthStatus === "unauthenticated" && (
           <>
             <Button asChild size="sm" variant="ghost" className={surfaceButtonClass}><Link href="/login">Log in</Link></Button>
             <Button asChild size="sm" className="rounded-sm bg-[#c6a354] font-semibold text-[#102018] hover:bg-[#d8ba70]"><Link href="/signup">Sign up</Link></Button>
           </>
         )}
-        {user.status === "authenticated" && (
+        {visibleAuthStatus === "authenticated" && (
           <>
           <Popover>
             <PopoverTrigger asChild>

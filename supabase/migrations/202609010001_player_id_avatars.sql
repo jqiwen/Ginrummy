@@ -19,6 +19,20 @@ $$;
 alter table public.profiles
   add column if not exists avatar_path text;
 
+-- display_name may still exist as a legacy NOT NULL column from the original
+-- schema. Current code no longer reads or writes it, so allow new rows to leave
+-- it null without dropping the column or any existing values.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'display_name'
+  ) then
+    alter table public.profiles alter column display_name drop not null;
+  end if;
+end;
+$$;
+
 -- The previous schema already prevented case-only duplicates. Normalize the
 -- preserved values before installing the renamed constraints.
 update public.profiles
@@ -64,6 +78,8 @@ create trigger profiles_prevent_player_id_change
 
 revoke update on table public.profiles from authenticated;
 grant update (avatar_path) on table public.profiles to authenticated;
+revoke select on table public.profiles from anon, authenticated;
+grant select (id, player_id, avatar_path) on table public.profiles to anon, authenticated;
 
 -- New signups use player_id metadata. The username fallback only supports an
 -- already-open registration page during a rolling deployment.

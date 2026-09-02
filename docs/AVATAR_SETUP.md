@@ -10,7 +10,7 @@ Gin Rummy keeps authentication identity and public identity separate:
 - `public.profiles.avatar_path`: optional path to the player's public profile image.
 - Email stays in Supabase Auth and is never copied into `public.profiles` or opponent payloads.
 
-The legacy `display_name` column may remain in an existing database, but current application code does not read or write it.
+The legacy `display_name` column may remain in an existing database. The migration preserves its values, removes its old `NOT NULL` requirement, and removes it from Data API column grants; current application code does not read or write it.
 
 ## Required database and Storage migration
 

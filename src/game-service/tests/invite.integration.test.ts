@@ -173,6 +173,7 @@ describe("registered-player invitations", () => {
     await once(returningHost, "connect");
     await expect(restored).resolves.toMatchObject({
       membership: { matchId: senderMatch.membership.matchId, playerId: "1" },
+      opponent: { playerId: "guestplayer", avatarPath: "guest-user/avatar.png" },
     });
   });
 
