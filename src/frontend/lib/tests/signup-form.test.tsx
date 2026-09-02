@@ -61,7 +61,7 @@ describe("SignUpForm", () => {
     render(<SignUpForm />);
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("User ID"), "ADMIN");
-    expect(await screen.findByText("This User ID is already taken.", {}, { timeout: 1_000 })).toBeInTheDocument();
+    expect(await screen.findByText("This User ID is already taken. Choose another one.", {}, { timeout: 1_000 })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "CREATE ACCOUNT" }));
     expect(mockedSignUp).not.toHaveBeenCalled();
   });
@@ -76,16 +76,16 @@ describe("SignUpForm", () => {
   });
 
   it.each([
-    ["duplicate User ID", new AuthUiError("This User ID is already taken.", "player_id_exists")],
-    ["duplicate email", new AuthUiError("An account with this email already exists. Try signing in instead.", "email_exists")],
-    ["network failure", new AuthUiError("Unable to create your account. Please try again.", "unavailable")],
-  ])("preserves every form value after a %s", async (_scenario, failure) => {
+    ["duplicate User ID", new AuthUiError("This User ID is already taken.", "player_id_exists"), "This User ID is already taken. Choose another one."],
+    ["duplicate email", new AuthUiError("An account with this email already exists. Try signing in instead.", "email_exists"), "An account with this email already exists. Try signing in instead."],
+    ["network failure", new AuthUiError("Unable to create your account. Please try again.", "unavailable"), "Unable to create your account. Please try again."],
+  ])("preserves every form value after a %s", async (_scenario, failure, displayedMessage) => {
     mockedSignUp.mockRejectedValue(failure);
     render(<SignUpForm />);
     const user = await completeSignup();
     const valuesBeforeSubmission = currentSignupValues();
     await user.click(screen.getByRole("button", { name: "CREATE ACCOUNT" }));
-    expect(await screen.findByText(failure.message)).toBeInTheDocument();
+    expect(await screen.findByText(displayedMessage)).toBeInTheDocument();
     expect(currentSignupValues()).toEqual(valuesBeforeSubmission);
   });
 

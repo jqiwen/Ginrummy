@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, LoaderCircle } from "lucide-react";
+import { CheckCircle2, CircleAlert, LoaderCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -9,13 +9,26 @@ import { useForm } from "react-hook-form";
 
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage, useFormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { AuthUiError, checkPlayerIdAvailability, getAuthErrorMessage, signUpWithEmail } from "@/lib/auth/actions";
 import { normalizePlayerId, playerIdSchema, type SignupFormValues, signupSchema } from "@/lib/auth/validation";
 
 const inputClass = "h-11 border-[#aa9159]/35 bg-[#06110d]/70 text-[#fff7df] placeholder:text-[#d8d1bf]/35 focus-visible:ring-[#d2b66e]";
+const takenPlayerIdMessage = "This User ID is already taken. Choose another one.";
 type AvailabilityState = "empty" | "typing" | "checking" | "available" | "taken" | "unavailable";
+
+function CompactPlayerIdError() {
+  const { error, formMessageId } = useFormField();
+  if (!error) return null;
+
+  return (
+    <p id={formMessageId} role="alert" className="flex items-start gap-1.5 text-[11px] leading-4 text-[#ff9285]">
+      <CircleAlert aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0" />
+      <span>{String(error.message)}</span>
+    </p>
+  );
+}
 
 export function SignUpForm() {
   const router = useRouter();
@@ -49,7 +62,7 @@ export function SignUpForm() {
         if (!active) return;
         setAvailability(available ? "available" : "taken");
         if (available) form.clearErrors("playerId");
-        else form.setError("playerId", { type: "manual", message: "This User ID is already taken." });
+        else form.setError("playerId", { type: "manual", message: takenPlayerIdMessage });
       } catch {
         if (active) setAvailability("unavailable");
       }
@@ -76,7 +89,7 @@ export function SignUpForm() {
       const message = getAuthErrorMessage(caught, "Unable to create your account. Please try again.");
       if (caught instanceof AuthUiError && caught.code === "player_id_exists") {
         setAvailability("taken");
-        form.setError("playerId", { type: "server", message });
+        form.setError("playerId", { type: "server", message: takenPlayerIdMessage });
       } else if (caught instanceof AuthUiError && caught.code === "email_exists") {
         form.setError("email", { type: "server", message });
       } else {
@@ -101,19 +114,30 @@ export function SignUpForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-        <FormField control={form.control} name="playerId" render={({ field }) => (
-          <FormItem>
+        <FormField control={form.control} name="playerId" render={({ field, fieldState }) => (
+          <FormItem className="space-y-1.5">
             <FormLabel className="text-[#eee4cb]">User ID</FormLabel>
-            <FormControl><Input autoComplete="username" placeholder="kyra123" className={inputClass} aria-describedby="player-id-help player-id-availability" {...field} /></FormControl>
-            <FormDescription id="player-id-help" className="rounded-sm border-l-2 border-[#c6a354]/60 bg-[#c6a354]/8 px-3 py-2 text-[#e5d4a4]/75">
-              3–20 letters, numbers, or underscores. Your User ID is unique and cannot be changed later.
+            <FormControl><Input autoComplete="username" placeholder="kyra123" className={inputClass} {...field} /></FormControl>
+            <CompactPlayerIdError />
+            {!fieldState.error && availability === "checking" && (
+              <p id="player-id-availability" aria-live="polite" className="flex items-center gap-1.5 text-[11px] leading-4 text-[#d8d1bf]/60">
+                <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 animate-spin" />Checking…
+              </p>
+            )}
+            {!fieldState.error && availability === "available" && (
+              <p id="player-id-availability" aria-live="polite" className="flex items-center gap-1.5 text-[11px] leading-4 text-emerald-200/80">
+                <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />User ID is available.
+              </p>
+            )}
+            {!fieldState.error && availability === "unavailable" && (
+              <p id="player-id-availability" aria-live="polite" className="flex items-center gap-1.5 text-[11px] leading-4 text-[#d8d1bf]/55">
+                <CircleAlert aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />Availability could not be checked yet.
+              </p>
+            )}
+            <FormDescription className="flex items-start gap-1.5 text-[11px] leading-4 text-[#d8c58f]/65">
+              <CheckCircle2 aria-hidden="true" className="mt-px h-3.5 w-3.5 shrink-0 text-[#c6a354]/75" />
+              <span>3–20 letters, numbers, or underscores. Your User ID is unique and cannot be changed later.</span>
             </FormDescription>
-            <div id="player-id-availability" aria-live="polite" className="min-h-4 text-xs">
-              {availability === "checking" && <span className="inline-flex items-center text-[#d8d1bf]/60"><LoaderCircle className="mr-1.5 h-3 w-3 animate-spin" />Checking…</span>}
-              {availability === "available" && <span className="text-emerald-200/80">User ID is available.</span>}
-              {availability === "unavailable" && <span className="text-[#d8d1bf]/55">Availability could not be checked yet.</span>}
-            </div>
-            <FormMessage className="text-[#ffb4a7]" />
           </FormItem>
         )} />
         <FormField control={form.control} name="email" render={({ field }) => (
